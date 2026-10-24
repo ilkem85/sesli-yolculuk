@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sesli Yolculuk - Test 1</title>
+<style>
+:root{--blue:#1E5BB8;--blue2:#E8F0FB;--orange:#F28C28;--text:#1d2633;--muted:#6b7686}
+*{box-sizing:border-box}
+body{margin:0 auto;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#fff;color:var(--text);padding:16px;max-width:560px}
+h1{color:var(--blue);font-size:22px;margin:4px 0 2px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:14px}
+.card{border:2px solid var(--blue2);border-radius:14px;padding:14px;margin-bottom:14px}
+.card h2{font-size:17px;margin:0 0 8px;color:var(--blue)}
+.card p{font-size:14px;color:var(--muted);margin:0 0 8px}
+button{font:inherit;font-size:16px;border:none;border-radius:12px;padding:12px 14px;margin:4px 4px 4px 0;cursor:pointer;background:var(--blue);color:#fff}
+button.alt{background:var(--orange)}
+button.ghost{background:var(--blue2);color:var(--blue)}
+button:disabled{opacity:.4}
+.meter{height:14px;background:var(--blue2);border-radius:8px;overflow:hidden;margin:8px 0}
+.meter>div{height:100%;width:0;background:#9bb6e0;transition:width .05s}
+.small{font-size:13px;color:var(--muted)}
+#srOut{font-size:15px;margin-top:6px;color:var(--text)}
+#log{background:#f6f8fb;border-radius:10px;padding:10px;font-size:13px;max-height:240px;overflow:auto;white-space:pre-wrap}
+input[type=range]{width:100%}
+#stage{position:fixed;inset:0;background:#000;display:none;z-index:10}
+#secret{position:absolute;top:0;right:0;width:90px;height:90px}
+#stageClose{position:absolute;bottom:10px;left:10px;background:#111;color:#444;font-size:12px;padding:6px 10px}
+</style>
+</head>
+<body>
+
+<h1>Sesli Yolculuk</h1>
+<div class="sub">Test 1: mikrofon, ses değiştirici, efektler ve konuşma tanıma</div>
+
+<div class="card">
+  <h2>1. Mikrofon</h2>
+  <p>Başlat, sessiz bekle (ortam ölçülüyor), sonra konuş. Çubuk turuncu olursa ses algılanıyor.</p>
+  <button id="btnMic">Mikrofonu başlat</button>
+  <div class="meter"><div id="meterBar"></div></div>
+  <div class="small" id="thrTxt">Algılama eşiği: -</div>
+  <div class="small" style="margin-top:8px">Hassasiyet (1 az, 5 çok): <b id="sensVal">3</b></div>
+  <input type="range" id="sens" min="1" max="5" value="3">
+</div>
+
+<div class="card">
+  <h2>2. Kayıt + ses değiştirici</h2>
+  <p>Anlatıcı "çuf çuf de" der, çocuk söyler, ses kalın tonla geri çalar. Sonra diğer efektleri dene.</p>
+  <button id="btnRec">Kayıt testini başlat</button><br>
+  <button class="ghost fx" data-fx="normal" disabled>Normal</button>
+  <button class="ghost fx" data-fx="dev" disabled>Dev</button>
+  <button class="ghost fx" data-fx="sincap" disabled>Sincap</button>
+  <button class="ghost fx" data-fx="robot" disabled>Robot</button>
+  <button class="ghost fx" data-fx="tunel" disabled>Tünel yankısı</button>
+</div>
+
+<div class="card">
+  <h2>3. Efekt sesleri</h2>
+  <button class="alt sfx" data-s="duduk">Tren düdüğü</button>
+  <button class="alt sfx" data-s="cufcuf">Çuf çuf</button>
+  <button class="alt sfx" data-s="korna">Korna</button>
+  <button class="alt sfx" data-s="roket">Roket</button>
+  <button class="alt sfx" data-s="ding">Ödül</button>
+</div>
+
+<div class="card">
+  <h2>4. Konuşma tanıma (seçim)</h2>
+  <p>"Trene mi, arabaya mı?" diye sorar. Telefonun ne duyduğu aşağıda yazar. İnternet gerekebilir.</p>
+  <button id="btnSR">Seçim testini başlat</button>
+  <div id="srOut"></div>
+</div>
+
+<div class="card">
+  <h2>5. Mini sahne (karanlık ekran)</h2>
+  <p>Gerçek oyun hissi: ekran kararır, her şey sesle ilerler. Sağ üst köşeye dokunmak gizli "devam" butonudur. Çıkış: sol alttaki soluk yazı.</p>
+  <button class="alt" id="btnScene">Mini sahneyi başlat</button>
+</div>
+
+<div class="card">
+  <h2>Günlük</h2>
+  <div class="small" id="support"></div>
+  <div id="log"></div>
+</div>
+
+<div id="stage">
+  <div id="secret"></div>
+  <button id="stageClose">çıkış</button>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+function log(m){const t=new Date().toLocaleTimeString('tr-TR');$('log').textContent='['+t+'] '+m+'\n'+$('log').textContent;}
+
+let ctx=null,busy=false,parentSkip=null,last=null;
+function getCtx(){if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();return ctx;}
+
+/* ---------- Anlatıcı (TTS) ---------- */
+let trVoice=null;
+function loadVoices(){const v=speechSynthesis.getVoices();trVoice=v.find(x=>/^tr/i.test(x.lang))||null;showSupport();}
+if('speechSynthesis' in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices;}
+function say(text,opt){
+  opt=opt||{};
+  return new Promise(res=>{
+    if(!('speechSynthesis' in window)){log('Anlatıcı sesi yok');return res();}
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='tr-TR';if(trVoice)u.voice=trVoice;
+    u.rate=opt.rate||0.9;u.pitch=opt.pitch||1.1;
+    let done=false;const fin=()=>{if(!done){done=true;setTimeout(res,300);}};
+    u.onend=fin;u.onerror=fin;
+    speechSynthesis.speak(u);
+    setTimeout(fin,2000+text.length*120);
+  });
+}
+
+/* ---------- Mikrofon ---------- */
+let micStream=null,analyser=null,buf32=null,threshold=0.03,noiseFloor=0.01,sens=3,meterTimer=null;
+function level(){if(!analyser)return 0;analyser.getFloatTimeDomainData(buf32);let s=0;for(let i=0;i<buf32.length;i++)s+=buf32[i]*buf32[i];return Math.sqrt(s/buf32.length);}
+function updateThreshold(){const mult=[0,6,4.5,3.5,2.6,1.9][sens];threshold=Math.min(0.15,Math.max(0.012,noiseFloor*mult));$('thrTxt').textContent='Algılama eşiği: '+threshold.toFixed(3)+' (ortam '+noiseFloor.toFixed(3)+')';}
+async function startMic(){
+  const c=getCtx();
+  if(micStream&&micStream.active&&analyser)return true;
+  try{micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});}
+  catch(e){log('Mikrofon izni alınamadı: '+e.message);return false;}
+  const src=c.createMediaStreamSource(micStream);
+  analyser=c.createAnalyser();analyser.fftSize=1024;src.connect(analyser);
+  buf32=new Float32Array(analyser.fftSize);
+  let s=0,n=0;const t0=performance.now();
+  await new Promise(r=>{const iv=setInterval(()=>{s+=level();n++;if(performance.now()-t0>700){clearInterval(iv);r();}},30);});
+  noiseFloor=s/Math.max(1,n);updateThreshold();
+  if(!meterTimer)meterTimer=setInterval(()=>{const l=level();const b=$('meterBar');b.style.width=Math.min(100,l/0.25*100)+'%';b.style.background=l>threshold?'var(--orange)':'#9bb6e0';},50);
+  log('Mikrofon açık. Ortam gürültüsü: '+noiseFloor.toFixed(3));
+  return true;
+}
+function stopMic(){if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;analyser=null;}}
+
+/* ---------- Dinle + kaydet ---------- */
+async function listenAndRecord(o){
+  o=o||{};const maxWait=o.maxWait||8000,maxLen=o.maxLen||4000,silence=o.silence||900;
+  if(!await startMic())return {result:'nomic'};
+  const c=getCtx();
+  let rec;try{rec=new MediaRecorder(micStream);}catch(e){log('Kayıt desteklenmiyor: '+e.message);return {result:'norec'};}
+  const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+  rec.start();log('Dinliyorum...');
+  const result=await new Promise(res=>{
+    const t0=performance.now();let voiceAt=0,lastVoice=0,voicedMs=0,iv=null;
+    parentSkip=()=>{clearInterval(iv);res('parent');};
+    iv=setInterval(()=>{
+      const now=performance.now(),l=level();
+      if(l>threshold){if(!voiceAt)voiceAt=now;lastVoice=now;voicedMs+=30;}
+      if(voiceAt&&now-lastVoice>silence){
+        if(voicedMs>=150){clearInterval(iv);return res('voice');}
+        voiceAt=0;voicedMs=0;
+      }
+      if(voiceAt&&now-voiceAt>maxLen){clearInterval(iv);return res('voice');}
+      if(!voiceAt&&now-t0>maxWait){clearInterval(iv);return res('timeout');}
+    },30);
+  });
+  parentSkip=null;
+  await new Promise(r=>{rec.onstop=r;try{rec.stop();}catch(e){r();}});
+  log('Dinleme sonucu: '+result);
+  if(result!=='voice')return {result};
+  try{
+    const blob=new Blob(chunks,{type:rec.mimeType||'audio/webm'});
+    const decoded=await c.decodeAudioData(await blob.arrayBuffer());
+    const t=trimBuffer(decoded);
+    return {result,buf:t.buf,gain:t.gain};
+  }catch(e){log('Ses çözülemedi: '+e.message);return {result:'voice'};}
+}
+function trimBuffer(b){
+  const c=getCtx(),d=b.getChannelData(0),thr=Math.max(0.01,threshold*0.6),sr=b.sampleRate;
+  let s=0,e=d.length-1;
+  while(s<d.length&&Math.abs(d[s])<thr)s++;
+  while(e>s&&Math.abs(d[e])<thr)e--;
+  s=Math.max(0,s-Math.floor(sr*0.05));e=Math.min(d.length,e+Math.floor(sr*0.12));
+  let out=b;
+  if(e-s>sr*0.15){out=c.createBuffer(1,e-s,sr);out.copyToChannel(d.slice(s,e),0);}
+  let peak=0;const od=out.getChannelData(0);
+  for(let i=0;i<od.length;i++){const a=Math.abs(od[i]);if(a>peak)peak=a;}
+  return {buf:out,gain:peak>0?Math.min(5,0.9/peak):1};
+}
+
+/* ---------- Ses değiştirici ---------- */
+function playVoice(buf,gainVal,effect){
+  const c=getCtx();
+  return new Promise(res=>{
+    const src=c.createBufferSource();src.buffer=buf;
+    const g=c.createGain();g.gain.value=gainVal;src.connect(g);
+    let out=g,tail=0,osc=null;
+    if(effect==='dev')src.playbackRate.value=0.68;
+    if(effect==='sincap')src.playbackRate.value=1.65;
+    if(effect==='robot'){
+      src.playbackRate.value=0.95;g.gain.value=gainVal*1.4;
+      const rm=c.createGain();rm.gain.value=0;
+      osc=c.createOscillator();osc.frequency.value=55;osc.connect(rm.gain);
+      g.connect(rm);out=rm;osc.start();
+    }
+    if(effect==='tunel'){
+      const dl=c.createDelay(1.0);dl.delayTime.value=0.3;
+      const fb=c.createGain();fb.gain.value=0.45;
+      const wet=c.createGain();wet.gain.value=0.7;
+      g.connect(dl);dl.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(c.destination);tail=1.6;
+    }
+    out.connect(c.destination);
+    src.onended=()=>{if(osc)osc.stop();setTimeout(res,tail*1000+100);};
+    src.start();
+  });
+}
+
+/* ---------- Efekt sesleri ---------- */
+function noiseBuffer(sec){const c=getCtx(),b=c.createBuffer(1,Math.floor(c.sampleRate*sec),c.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;return b;}
+function env(g,t,a,h,r,p){g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(p,t+a);g.gain.setValueAtTime(p,t+a+h);g.gain.linearRampToValueAtTime(0,t+a+h+r);}
+const SFX={
+  duduk(){const c=getCtx(),t=c.currentTime,f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=1800;
+    const g=c.createGain();env(g,t,0.08,1.0,0.3,0.18);f.connect(g);g.connect(c.destination);
+    [311,370,466].forEach(fr=>{const o=c.createOscillator();o.type='sawtooth';o.frequency.value=fr;o.connect(f);o.start(t);o.stop(t+1.5);});return 1500;},
+  cufcuf(){const c=getCtx(),t0=c.currentTime,nb=noiseBuffer(0.3);let t=t0;
+    [0.42,0.38,0.33,0.29,0.26,0.24,0.22,0.21].forEach((gap,i)=>{const s=c.createBufferSource();s.buffer=nb;
+      const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=i%2?900:600;f.Q.value=0.8;
+      const g=c.createGain();env(g,t,0.01,0.05,0.14,0.6);s.connect(f);f.connect(g);g.connect(c.destination);
+      s.start(t);s.stop(t+0.25);t+=gap;});return (t-t0)*1000+200;},
+  korna(){const c=getCtx(),t0=c.currentTime;
+    [0,0.35].forEach(dt=>{const g=c.createGain();env(g,t0+dt,0.01,0.2,0.05,0.12);g.connect(c.destination);
+      [400,500].forEach(fr=>{const o=c.createOscillator();o.type='square';o.frequency.value=fr;o.connect(g);o.start(t0+dt);o.stop(t0+dt+0.3);});});return 800;},
+  roket(){const c=getCtx(),t=c.currentTime,s=c.createBufferSource();s.buffer=noiseBuffer(3);
+    const f=c.createBiquadFilter();f.type='lowpass';f.frequency.setValueAtTime(200,t);f.frequency.exponentialRampToValueAtTime(3000,t+2.5);
+    const g=c.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.7,t+1.8);g.gain.linearRampToValueAtTime(0,t+3);
+    s.connect(f);f.connect(g);g.connect(c.destination);s.start(t);s.stop(t+3);return 3000;},
+  ding(){const c=getCtx(),t=c.currentTime;
+    [784,988,1319].forEach((fr,i)=>{const o=c.createOscillator();o.type='sine';o.frequency.value=fr;
+      const g=c.createGain();env(g,t+i*0.12,0.01,0.05,0.35,0.25);o.connect(g);g.connect(c.destination);
+      o.start(t+i*0.12);o.stop(t+i*0.12+0.5);});return 800;}
+};
+function sfx(name){const ms=SFX[name]();return new Promise(r=>setTimeout(r,ms));}
+
+/* ---------- Konuşma tanıma ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function recognizeOnce(timeoutMs){
+  timeoutMs=timeoutMs||7000;
+  return new Promise(res=>{
+    if(!SR){log('Konuşma tanıma bu tarayıcıda yok');return res([]);}
+    const r=new SR();r.lang='tr-TR';r.interimResults=false;r.maxAlternatives=5;r.continuous=false;
+    let done=false,to=null;
+    const fin=v=>{if(done)return;done=true;parentSkip=null;clearTimeout(to);try{r.abort();}catch(e){}res(v);};
+    r.onresult=e=>{const a=[];for(let i=0;i<e.results[0].length;i++)a.push(e.results[0][i].transcript);fin(a);};
+    r.onerror=e=>{log('Tanıma hatası: '+e.error);fin([]);};
+    r.onend=()=>fin([]);
+    parentSkip=()=>fin(['__parent__']);
+    to=setTimeout(()=>fin([]),timeoutMs);
+    try{r.start();}catch(e){log('Tanıma başlatılamadı: '+e.message);fin([]);}
+  });
+}
+function norm(s){return (s||'').toLocaleLowerCase('tr-TR').replace(/[^a-zçğıöşü\s]/g,' ').trim();}
+function lev(a,b){const m=a.length,n=b.length,dp=[];for(let i=0;i<=m;i++){dp[i]=[i];}for(let j=1;j<=n;j++)dp[0][j]=j;
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return dp[m][n];}
+function matchChoice(alts,options){
+  if(alts[0]==='__parent__')return {id:options[0].id,score:1,parent:true};
+  let best=null,bs=0;
+  alts.forEach(a=>norm(a).split(/\s+/).forEach(w=>{if(!w)return;
+    options.forEach(o=>o.words.forEach(ow=>{const sc=1-lev(w,ow)/Math.max(w.length,ow.length);if(sc>bs){bs=sc;best=o.id;}}));}));
+  return bs>=0.5?{id:best,score:bs}:null;
+}
+async function askChoice(question,retry,options){
+  for(let n=1;n<=2;n++){
+    await say(n===1?question:retry);
+    stopMic();
+    const alts=await recognizeOnce();
+    const heard=alts.length?alts.join(' | '):'(hiçbir şey)';
+    log('Duyulan: '+heard);
+    const m=matchChoice(alts,options);
+    $('srOut').textContent='Duyulan: '+heard+(m?'  →  Seçim: '+m.id+' (benzerlik '+m.score.toFixed(2)+')':'  →  eşleşme yok');
+    if(m)return m.id;
+  }
+  return null;
+}
+const CH_OPTS=[{id:'tren',words:['tren','trene','treni','teren','tiren']},{id:'araba',words:['araba','arabaya','arabayı','aba']}];
+
+/* ---------- Testler ---------- */
+async function recordTest(){
+  if(busy)return;busy=true;
+  try{
+    await say('Tren gibi çuf çuf de!');
+    const r=await listenAndRecord();
+    if(r.buf){
+      last=r;document.querySelectorAll('.fx').forEach(b=>b.disabled=false);
+      log('Kayıt: '+r.buf.duration.toFixed(2)+' sn');
+      await sfx('ding');await playVoice(r.buf,r.gain,'dev');
+    }else{await say('Sesini duyamadım. Hassasiyeti artırıp tekrar dene.');}
+  }finally{busy=false;}
+}
+async function srTest(){
+  if(busy)return;busy=true;
+  try{
+    const ch=await askChoice('Trene mi binelim, arabaya mı?','Bir daha söyler misin? Tren mi, araba mı?',CH_OPTS);
+    if(ch==='araba'){await sfx('korna');await say('Bip bip, arabaya bindik!');}
+    else if(ch==='tren'){await sfx('duduk');await say('Trene bindik!');}
+    else{await say('Sanırım trene binmek istedin!');}
+  }finally{busy=false;}
+}
+let wakeLock=null;
+async function miniScene(){
+  if(busy)return;busy=true;
+  $('stage').style.display='block';
+  try{if('wakeLock' in navigator)wakeLock=await navigator.wakeLock.request('screen');}catch(e){}
+  try{
+    await startMic();
+    await sfx('duduk');
+    await say('Tren istasyonda bekliyor. Treni çalıştırmak için çuf çuf de!');
+    let r=await listenAndRecord();
+    if(r.result==='timeout'){await say('Hadi birlikte söyleyelim. Çuf çuf!');r=await listenAndRecord();}
+    if(r.buf){await sfx('ding');await say('Dinle, tren senin sesinle konuşuyor!');await playVoice(r.buf,r.gain,'dev');}
+    else if(r.result==='parent'){await sfx('ding');}
+    await sfx('cufcuf');
+    await say('Harika! Tren yola çıktı. Şimdi bir tünele giriyoruz. Tünelde seslen bakalım, merhaba de!');
+    r=await listenAndRecord();
+    if(r.buf){await playVoice(r.buf,r.gain,'tunel');await say('Tünel sesini geri yolladı!');}
+    else if(r.result==='parent'){await sfx('ding');}
+    else{await say('Tünel çok sessizmiş. Neyse, devam!');}
+    const ch=await askChoice('Tünelden çıktık. Trene devam mı edelim, yoksa arabaya mı binelim?','Bir daha söyler misin? Tren mi, araba mı?',CH_OPTS);
+    if(ch==='araba'){await sfx('korna');await say('Bip bip! Arabaya bindik, eve gidiyoruz!');}
+    else if(ch==='tren'){await sfx('duduk');await say('Tren devam ediyor. Sonraki durak hayvanat bahçesi!');}
+    else{await sfx('duduk');await say('Sanırım trende kalmak istedin. Tren devam ediyor!');}
+    await sfx('ding');await say('Test bitti. Aferin sana!');
+  }finally{
+    $('stage').style.display='none';busy=false;
+    try{if(wakeLock)wakeLock.release();}catch(e){}
+  }
+}
+
+/* ---------- Bağlantılar ---------- */
+$('btnMic').onclick=()=>startMic();
+$('sens').oninput=e=>{sens=+e.target.value;$('sensVal').textContent=sens;updateThreshold();};
+$('btnRec').onclick=recordTest;
+document.querySelectorAll('.fx').forEach(b=>b.onclick=()=>{if(last&&last.buf)playVoice(last.buf,last.gain,b.dataset.fx);});
+document.querySelectorAll('.sfx').forEach(b=>b.onclick=()=>sfx(b.dataset.s));
+$('btnSR').onclick=srTest;
+$('btnScene').onclick=miniScene;
+$('secret').onclick=()=>{if(parentSkip){log('Ebeveyn butonu: devam');parentSkip();}};
+$('stageClose').onclick=()=>location.reload();
+
+function showSupport(){
+  const a=[];
+  a.push('Türkçe anlatıcı: '+(trVoice?'var ('+trVoice.name+')':'bulunamadı'));
+  a.push('Kayıt: '+(window.MediaRecorder?'var':'yok'));
+  a.push('Konuşma tanıma: '+(SR?'var':'yok'));
+  if(location.protocol!=='https:'&&location.hostname!=='localhost')a.push('UYARI: https değil, mikrofon çalışmayabilir');
+  $('support').textContent=a.join(' • ');
+}
+showSupport();
+</script>
+</body>
+</html>
