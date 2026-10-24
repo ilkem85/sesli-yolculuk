@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sesli Yolculuk - Test 1</title>
+<title>Sesli Yolculuk - Test 1.1</title>
 <style>
 :root{--blue:#1E5BB8;--blue2:#E8F0FB;--orange:#F28C28;--text:#1d2633;--muted:#6b7686}
 *{box-sizing:border-box}
@@ -31,7 +31,7 @@ input[type=range]{width:100%}
 <body>
 
 <h1>Sesli Yolculuk</h1>
-<div class="sub">Test 1: mikrofon, ses değiştirici, efektler ve konuşma tanıma</div>
+<div class="sub">Test 1.1: mikrofon, ses değiştirici, efektler ve konuşma tanıma</div>
 
 <div class="card">
   <h2>1. Mikrofon</h2>
@@ -39,6 +39,7 @@ input[type=range]{width:100%}
   <button id="btnMic">Mikrofonu başlat</button>
   <div class="meter"><div id="meterBar"></div></div>
   <div class="small" id="thrTxt">Algılama eşiği: -</div>
+  <div class="small" id="rawLvl">Anlık seviye: -</div>
   <div class="small" style="margin-top:8px">Hassasiyet (1 az, 5 çok): <b id="sensVal">3</b></div>
   <input type="range" id="sens" min="1" max="5" value="3">
 </div>
@@ -117,22 +118,37 @@ function say(text,opt){
 let micStream=null,analyser=null,buf32=null,threshold=0.03,noiseFloor=0.01,sens=3,meterTimer=null;
 function level(){if(!analyser)return 0;analyser.getFloatTimeDomainData(buf32);let s=0;for(let i=0;i<buf32.length;i++)s+=buf32[i]*buf32[i];return Math.sqrt(s/buf32.length);}
 function updateThreshold(){const mult=[0,6,4.5,3.5,2.6,1.9][sens];threshold=Math.min(0.15,Math.max(0.012,noiseFloor*mult));$('thrTxt').textContent='Algılama eşiği: '+threshold.toFixed(3)+' (ortam '+noiseFloor.toFixed(3)+')';}
+let micSrc=null,sink=null,rawMode=false;
+function openStream(raw){
+  return navigator.mediaDevices.getUserMedia(raw?{audio:true}:{audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+}
 async function startMic(){
   const c=getCtx();
   if(micStream&&micStream.active&&analyser)return true;
-  try{micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});}
-  catch(e){log('Mikrofon izni alınamadı: '+e.message);return false;}
-  const src=c.createMediaStreamSource(micStream);
-  analyser=c.createAnalyser();analyser.fftSize=1024;src.connect(analyser);
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){log('Bu tarayıcı mikrofona erişemiyor. Chrome ile ve https adresinden aç.');return false;}
+  try{micStream=await openStream(rawMode);}
+  catch(e){log('Mikrofon açılamadı: '+e.name+' - '+e.message);return false;}
+  try{await c.resume();}catch(e){}
+  const tr=micStream.getAudioTracks()[0];
+  log('Mikrofon: '+(tr?(tr.label||'isimsiz'):'iz yok')+' | durum: '+(tr?tr.readyState:'-')+' | kısık: '+(tr?tr.muted:'-')+' | ses motoru: '+c.state+(rawMode?' | yedek mod':''));
+  if(micSrc){try{micSrc.disconnect();}catch(e){}}
+  micSrc=c.createMediaStreamSource(micStream);
+  analyser=c.createAnalyser();analyser.fftSize=1024;
+  micSrc.connect(analyser);
+  if(!sink){sink=c.createGain();sink.gain.value=0;sink.connect(c.destination);}
+  analyser.connect(sink);
   buf32=new Float32Array(analyser.fftSize);
-  let s=0,n=0;const t0=performance.now();
-  await new Promise(r=>{const iv=setInterval(()=>{s+=level();n++;if(performance.now()-t0>700){clearInterval(iv);r();}},30);});
-  noiseFloor=s/Math.max(1,n);updateThreshold();
-  if(!meterTimer)meterTimer=setInterval(()=>{const l=level();const b=$('meterBar');b.style.width=Math.min(100,l/0.25*100)+'%';b.style.background=l>threshold?'var(--orange)':'#9bb6e0';},50);
-  log('Mikrofon açık. Ortam gürültüsü: '+noiseFloor.toFixed(3));
+  let s=0,n=0,peak=0;const t0=performance.now();
+  await new Promise(r=>{const iv=setInterval(()=>{const l=level();s+=l;n++;if(l>peak)peak=l;if(performance.now()-t0>800){clearInterval(iv);r();}},30);});
+  noiseFloor=s/Math.max(1,n);
+  if(peak===0&&!rawMode){log('Mikrofondan veri gelmiyor, yedek modla tekrar deniyorum...');stopMic();rawMode=true;return startMic();}
+  if(peak===0)log('UYARI: Mikrofon açık ama ses verisi sıfır. Ses motoru: '+c.state);
+  updateThreshold();
+  if(!meterTimer)meterTimer=setInterval(()=>{const l=level();const b=$('meterBar');b.style.width=Math.min(100,l/0.25*100)+'%';b.style.background=l>threshold?'var(--orange)':'#9bb6e0';$('rawLvl').textContent='Anlık seviye: '+l.toFixed(3)+' | ses motoru: '+(ctx?ctx.state:'-');},100);
+  log('Mikrofon hazır. Ortam gürültüsü: '+noiseFloor.toFixed(3));
   return true;
 }
-function stopMic(){if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;analyser=null;}}
+function stopMic(){if(micSrc){try{micSrc.disconnect();}catch(e){}micSrc=null;}if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}analyser=null;}
 
 /* ---------- Dinle + kaydet ---------- */
 async function listenAndRecord(o){
@@ -326,6 +342,11 @@ async function miniScene(){
     try{if(wakeLock)wakeLock.release();}catch(e){}
   }
 }
+
+/* ---------- Hata yakalama ---------- */
+window.addEventListener('error',e=>log('Hata: '+e.message));
+window.addEventListener('unhandledrejection',e=>log('Hata: '+((e.reason&&e.reason.message)||e.reason)));
+document.addEventListener('click',()=>{if(ctx&&ctx.state!=='running')ctx.resume();},true);
 
 /* ---------- Bağlantılar ---------- */
 $('btnMic').onclick=()=>startMic();
