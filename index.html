@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sesli Yolculuk - Test 1.1</title>
+<title>Sesli Yolculuk - Test 1.2</title>
 <style>
 :root{--blue:#1E5BB8;--blue2:#E8F0FB;--orange:#F28C28;--text:#1d2633;--muted:#6b7686}
 *{box-sizing:border-box}
@@ -31,7 +31,7 @@ input[type=range]{width:100%}
 <body>
 
 <h1>Sesli Yolculuk</h1>
-<div class="sub">Test 1.1: mikrofon, ses değiştirici, efektler ve konuşma tanıma</div>
+<div class="sub">Test 1.2: mikrofon, ses değiştirici, efektler ve konuşma tanıma</div>
 
 <div class="card">
   <h2>1. Mikrofon</h2>
@@ -91,6 +91,9 @@ input[type=range]{width:100%}
 <script>
 const $=id=>document.getElementById(id);
 function log(m){const t=new Date().toLocaleTimeString('tr-TR');$('log').textContent='['+t+'] '+m+'\n'+$('log').textContent;}
+window.addEventListener('error',e=>log('Hata: '+e.message+' (satır '+e.lineno+')'));
+window.addEventListener('unhandledrejection',e=>log('Hata: '+((e.reason&&e.reason.message)||e.reason)));
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 
 let ctx=null,busy=false,parentSkip=null,last=null;
 function getCtx(){if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();return ctx;}
@@ -250,7 +253,6 @@ const SFX={
 function sfx(name){const ms=SFX[name]();return new Promise(r=>setTimeout(r,ms));}
 
 /* ---------- Konuşma tanıma ---------- */
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 function recognizeOnce(timeoutMs){
   timeoutMs=timeoutMs||7000;
   return new Promise(res=>{
@@ -344,12 +346,10 @@ async function miniScene(){
 }
 
 /* ---------- Hata yakalama ---------- */
-window.addEventListener('error',e=>log('Hata: '+e.message));
-window.addEventListener('unhandledrejection',e=>log('Hata: '+((e.reason&&e.reason.message)||e.reason)));
 document.addEventListener('click',()=>{if(ctx&&ctx.state!=='running')ctx.resume();},true);
 
 /* ---------- Bağlantılar ---------- */
-$('btnMic').onclick=()=>startMic();
+$('btnMic').onclick=()=>{log('Mikrofon isteniyor...');startMic();};
 $('sens').oninput=e=>{sens=+e.target.value;$('sensVal').textContent=sens;updateThreshold();};
 $('btnRec').onclick=recordTest;
 document.querySelectorAll('.fx').forEach(b=>b.onclick=()=>{if(last&&last.buf)playVoice(last.buf,last.gain,b.dataset.fx);});
@@ -368,6 +368,7 @@ function showSupport(){
   $('support').textContent=a.join(' • ');
 }
 showSupport();
+log('Sayfa hazır (Test 1.2)');
 </script>
 </body>
 </html>
