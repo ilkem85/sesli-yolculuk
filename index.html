@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sesli Yolculuk</title>
+<style>
+:root{--blue:#1E5BB8;--blue2:#E8F0FB;--orange:#F28C28;--orange2:#FDEEDD;--text:#1d2633;--muted:#6b7686}
+*{box-sizing:border-box}
+body{margin:0 auto;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#fff;color:var(--text);padding:16px;max-width:560px}
+h1{color:var(--blue);font-size:26px;margin:6px 0 2px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:16px}
+.card{border:2px solid var(--blue2);border-radius:16px;padding:14px;margin-bottom:14px}
+.card h2{font-size:17px;margin:0 0 8px;color:var(--blue)}
+.card p{font-size:14px;color:var(--muted);margin:0 0 8px}
+.story{display:flex;align-items:center;gap:12px;border:2px solid var(--blue2);border-radius:14px;padding:12px;margin-bottom:10px}
+.story .ic{font-size:34px;width:46px;text-align:center}
+.story .tx{flex:1}
+.story .tx b{display:block;font-size:16px}
+.story .tx span{font-size:13px;color:var(--muted)}
+.story.off{opacity:.45}
+button{font:inherit;font-size:16px;border:none;border-radius:12px;padding:12px 16px;cursor:pointer;background:var(--blue);color:#fff}
+button.alt{background:var(--orange)}
+button.ghost{background:var(--blue2);color:var(--blue)}
+button.big{width:100%;font-size:19px;padding:16px;margin-bottom:12px}
+.meter{height:14px;background:var(--blue2);border-radius:8px;overflow:hidden;margin:8px 0}
+.meter>div{height:100%;width:0;background:#9bb6e0;transition:width .05s}
+.small{font-size:13px;color:var(--muted)}
+input[type=range]{width:100%}
+#summary{display:none;background:var(--orange2);border:2px solid var(--orange);border-radius:14px;padding:12px;margin-bottom:14px;font-size:15px}
+ul.tips{margin:4px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
+details summary{cursor:pointer;color:var(--blue);font-size:14px}
+#log{background:#f6f8fb;border-radius:10px;padding:10px;font-size:12px;max-height:220px;overflow:auto;white-space:pre-wrap;margin-top:8px}
+#stage{position:fixed;inset:0;background:#000;display:none;z-index:10;touch-action:manipulation}
+#secretR{position:absolute;top:0;right:0;width:100px;height:100px}
+#secretL{position:absolute;top:0;left:0;width:100px;height:100px}
+#exitZone{position:absolute;bottom:0;left:0;width:100px;height:80px;color:#262626;font-size:12px;display:flex;align-items:flex-end;padding:10px}
+#dot{position:absolute;bottom:16px;right:16px;width:10px;height:10px;border-radius:50%;background:#000}
+#dot.on{background:#5a3412;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+</style>
+</head>
+<body>
+
+<h1>Sesli Yolculuk</h1>
+<div class="sub">Ekransız, sesle oynanan hikaye macerası</div>
+
+<div id="summary"></div>
+
+<div class="card">
+  <h2>Hikaye seç</h2>
+  <div id="storyList"></div>
+  <button class="big alt" id="btnRandom">Rastgele hikaye başlat</button>
+</div>
+
+<div class="card">
+  <h2>Anlatıcı sesi</h2>
+  <p>Telefondaki Türkçe sesler listelenir. Birini seç, Dinle'ye bas, en yumuşağını bul.</p>
+  <select id="voiceSel" style="width:100%;font:inherit;font-size:15px;padding:10px;border:2px solid var(--blue2);border-radius:10px;margin-bottom:8px"></select>
+  <div class="small">Hız: <b id="rateVal"></b></div>
+  <input type="range" id="rate" min="0.6" max="1.1" step="0.05">
+  <div class="small">Ton (düşük = daha yumuşak): <b id="pitchVal"></b></div>
+  <input type="range" id="pitch" min="0.7" max="1.3" step="0.05">
+  <button class="ghost" id="btnVoice" style="margin-top:8px">Dinle</button>
+  <div class="small" id="voiceHint" style="margin-top:8px"></div>
+</div>
+
+<div class="card">
+  <h2>Mikrofon kontrolü</h2>
+  <p>Başlamadan önce bir kez dene. Konuşunca çubuk turuncu olmalı.</p>
+  <button class="ghost" id="btnMic">Mikrofonu dene</button>
+  <div class="meter"><div id="meterBar"></div></div>
+  <div class="small" id="thrTxt">Algılama eşiği: -</div>
+  <div class="small" id="rawLvl">Anlık seviye: -</div>
+  <div class="small" style="margin-top:8px">Hassasiyet (1 az, 5 çok): <b id="sensVal">3</b></div>
+  <input type="range" id="sens" min="1" max="5" value="3">
+</div>
+
+<div class="card">
+  <h2>Ebeveyn için gizli butonlar</h2>
+  <p>Oyun sırasında ekran kararır, çocuk hiçbir şey görmez.</p>
+  <ul class="tips">
+    <li><b>Sağ üst köşe:</b> "Söyledi, devam" (seçimlerde 1. seçenek)</li>
+    <li><b>Sol üst köşe:</b> seçimlerde 2. seçenek</li>
+    <li><b>Sol alt köşeye iki kez dokun:</b> oyundan çık</li>
+    <li>Sağ alttaki soluk nokta yanıp sönüyorsa oyun dinliyor demektir.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <details><summary>Teknik günlük</summary>
+    <div class="small" id="support" style="margin-top:8px"></div>
+    <div id="log"></div>
+  </details>
+</div>
+
+<div id="stage">
+  <div id="secretR"></div>
+  <div id="secretL"></div>
+  <div id="exitZone">çıkış</div>
+  <div id="dot"></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+function log(m){const t=new Date().toLocaleTimeString('tr-TR');$('log').textContent='['+t+'] '+m+'\n'+$('log').textContent;}
+window.addEventListener('error',e=>log('Hata: '+e.message+' (satır '+e.lineno+')'));
+window.addEventListener('unhandledrejection',e=>log('Hata: '+((e.reason&&e.reason.message)||e.reason)));
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let ctx=null,busy=false,parentSkip=null,parentAlt=null,last=null;
+function getCtx(){if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();return ctx;}
+
+/* ---------- Anlatıcı (TTS) ---------- */
+let trVoice=null,trVoices=[];
+const VS={name:'',rate:0.85,pitch:1.0};
+try{Object.assign(VS,JSON.parse(localStorage.getItem('sy_voice')||'{}'));}catch(e){}
+function saveVS(){try{localStorage.setItem('sy_voice',JSON.stringify(VS));}catch(e){}}
+function loadVoices(){
+  const v=speechSynthesis.getVoices();
+  trVoices=v.filter(x=>/^tr/i.test(x.lang));
+  trVoice=trVoices.find(x=>x.name===VS.name)||trVoices.find(x=>/natural|neural|online|premium|enhanced/i.test(x.name))||trVoices[0]||null;
+  if(typeof renderVoices==='function')renderVoices();
+  showSupport();
+}
+if('speechSynthesis' in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices;}
+function say(text,opt){
+  opt=opt||{};
+  return new Promise(res=>{
+    if(!('speechSynthesis' in window)){log('Anlatıcı sesi yok');return res();}
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='tr-TR';if(trVoice)u.voice=trVoice;
+    u.rate=opt.rate||VS.rate;u.pitch=opt.pitch||VS.pitch;
+    let done=false;const fin=()=>{if(!done){done=true;setTimeout(res,300);}};
+    u.onend=fin;u.onerror=fin;
+    speechSynthesis.speak(u);
+    setTimeout(fin,2000+text.length*120);
+  });
+}
+
+/* ---------- Mikrofon ---------- */
+let micStream=null,analyser=null,buf32=null,threshold=0.03,noiseFloor=0.01,sens=3,meterTimer=null;
+function level(){if(!analyser)return 0;analyser.getFloatTimeDomainData(buf32);let s=0;for(let i=0;i<buf32.length;i++)s+=buf32[i]*buf32[i];return Math.sqrt(s/buf32.length);}
+function updateThreshold(){const mult=[0,6,4.5,3.5,2.6,1.9][sens];threshold=Math.min(0.15,Math.max(0.012,noiseFloor*mult));$('thrTxt').textContent='Algılama eşiği: '+threshold.toFixed(3)+' (ortam '+noiseFloor.toFixed(3)+')';}
+let micSrc=null,sink=null,rawMode=false;
+function openStream(raw){
+  return navigator.mediaDevices.getUserMedia(raw?{audio:true}:{audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+}
+async function startMic(){
+  const c=getCtx();
+  if(micStream&&micStream.active&&analyser)return true;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){log('Bu tarayıcı mikrofona erişemiyor. Chrome ile ve https adresinden aç.');return false;}
+  try{micStream=await openStream(rawMode);}
+  catch(e){log('Mikrofon açılamadı: '+e.name+' - '+e.message);return false;}
+  try{await c.resume();}catch(e){}
+  const tr=micStream.getAudioTracks()[0];
+  log('Mikrofon: '+(tr?(tr.label||'isimsiz'):'iz yok')+' | durum: '+(tr?tr.readyState:'-')+' | kısık: '+(tr?tr.muted:'-')+' | ses motoru: '+c.state+(rawMode?' | yedek mod':''));
+  if(micSrc){try{micSrc.disconnect();}catch(e){}}
+  micSrc=c.createMediaStreamSource(micStream);
+  analyser=c.createAnalyser();analyser.fftSize=1024;
+  micSrc.connect(analyser);
+  if(!sink){sink=c.createGain();sink.gain.value=0;sink.connect(c.destination);}
+  analyser.connect(sink);
+  buf32=new Float32Array(analyser.fftSize);
+  let s=0,n=0,peak=0;const t0=performance.now();
+  await new Promise(r=>{const iv=setInterval(()=>{const l=level();s+=l;n++;if(l>peak)peak=l;if(performance.now()-t0>800){clearInterval(iv);r();}},30);});
+  noiseFloor=s/Math.max(1,n);
+  if(peak===0&&!rawMode){log('Mikrofondan veri gelmiyor, yedek modla tekrar deniyorum...');stopMic();rawMode=true;return startMic();}
+  if(peak===0)log('UYARI: Mikrofon açık ama ses verisi sıfır. Ses motoru: '+c.state);
+  updateThreshold();
+  if(!meterTimer)meterTimer=setInterval(()=>{const l=level();const b=$('meterBar');b.style.width=Math.min(100,l/0.25*100)+'%';b.style.background=l>threshold?'var(--orange)':'#9bb6e0';$('rawLvl').textContent='Anlık seviye: '+l.toFixed(3)+' | ses motoru: '+(ctx?ctx.state:'-');},100);
+  log('Mikrofon hazır. Ortam gürültüsü: '+noiseFloor.toFixed(3));
+  return true;
+}
+function stopMic(){if(micSrc){try{micSrc.disconnect();}catch(e){}micSrc=null;}if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}analyser=null;}
+
+/* ---------- Dinle + kaydet ---------- */
+async function listenAndRecord(o){
+  o=o||{};const maxWait=o.maxWait||8000,maxLen=o.maxLen||5000,silence=o.silence||1300;
+  if(!await startMic())return {result:'nomic'};
+  const c=getCtx();
+  let rec;try{rec=new MediaRecorder(micStream);}catch(e){log('Kayıt desteklenmiyor: '+e.message);return {result:'norec'};}
+  const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+  rec.start(100);log('Dinliyorum...');
+  const result=await new Promise(res=>{
+    const t0=performance.now();let voiceAt=0,lastVoice=0,voicedMs=0,iv=null;
+    parentSkip=()=>{clearInterval(iv);res('parent');};
+    parentAlt=()=>{clearInterval(iv);res('parent2');};
+    iv=setInterval(()=>{
+      const now=performance.now(),l=level();
+      if(l>threshold){if(!voiceAt)voiceAt=now;lastVoice=now;voicedMs+=30;}
+      if(voiceAt&&now-lastVoice>silence){
+        if(voicedMs>=150){clearInterval(iv);return res('voice');}
+        voiceAt=0;voicedMs=0;
+      }
+      if(voiceAt&&now-voiceAt>maxLen){clearInterval(iv);return res('voice');}
+      if(!voiceAt&&now-t0>maxWait){clearInterval(iv);return res('timeout');}
+    },30);
+  });
+  parentSkip=null;parentAlt=null;
+  await new Promise(r=>setTimeout(r,250));
+  await new Promise(r=>{rec.onstop=r;try{rec.stop();}catch(e){r();}});
+  log('Dinleme sonucu: '+result);
+  if(result!=='voice')return {result};
+  try{
+    const blob=new Blob(chunks,{type:rec.mimeType||'audio/webm'});
+    const decoded=await c.decodeAudioData(await blob.arrayBuffer());
+    const t=trimBuffer(decoded);
+    return {result,buf:t.buf,gain:t.gain};
+  }catch(e){log('Ses çözülemedi: '+e.message);return {result:'voice'};}
+}
+/* Sessiz baş/son kısmı kırp: 20 ms'lik pencerelerin ortalama gücüne bakar,
+   kelime sonundaki yumuşak sesleri (f, s, ş) kesmemek için sona bol pay bırakır */
+function trimBuffer(b){
+  const c=getCtx(),d=b.getChannelData(0),sr=b.sampleRate,win=Math.max(1,Math.floor(sr*0.02));
+  const thr=Math.max(0.005,noiseFloor*1.6);
+  let first=-1,lastEnd=-1;
+  for(let i=0;i+win<=d.length;i+=win){
+    let s=0;for(let j=i;j<i+win;j++)s+=d[j]*d[j];
+    if(Math.sqrt(s/win)>thr){if(first<0)first=i;lastEnd=i+win;}
+  }
+  let s0=0,e0=d.length;
+  if(first>=0){s0=Math.max(0,first-Math.floor(sr*0.15));e0=Math.min(d.length,lastEnd+Math.floor(sr*0.4));}
+  const seg=d.slice(s0,e0);
+  const fade=Math.min(seg.length,Math.floor(sr*0.04));
+  for(let i=0;i<fade;i++)seg[seg.length-1-i]*=i/fade;
+  const out=c.createBuffer(1,Math.max(1,seg.length),sr);out.copyToChannel(seg,0);
+  let peak=0;for(let i=0;i<seg.length;i++){const a=Math.abs(seg[i]);if(a>peak)peak=a;}
+  return {buf:out,gain:peak>0?Math.min(5,0.9/peak):1};
+}
+
+/* Gerçek perde kaydırma (granüler): sesi inceltir/kalınlaştırır ama hızı ayrı ayarlanır.
+   pitch 1.9 = çok ince (sincap), 0.62 = çok kalın (dev). speed >1 hızlı, <1 yavaş. */
+function pitchShift(buf,pitch,speed){
+  const c=getCtx(),sr=buf.sampleRate,src=buf.getChannelData(0),L=src.length;
+  const N=Math.floor(sr*0.05),H=Math.floor(N/4);
+  const outLen=Math.floor(L/speed)+N;
+  const out=new Float32Array(outLen),norm=new Float32Array(outLen);
+  const w=new Float32Array(N);for(let i=0;i<N;i++)w[i]=0.5-0.5*Math.cos(2*Math.PI*i/(N-1));
+  for(let o=0;o<outLen-N;o+=H){
+    const s=o*speed;
+    for(let i=0;i<N;i++){
+      const p=s+i*pitch,k=Math.floor(p);
+      if(k+1>=L)break;
+      const v=src[k]+(src[k+1]-src[k])*(p-k);
+      out[o+i]+=v*w[i];norm[o+i]+=w[i];
+    }
+  }
+  for(let i=0;i<outLen;i++)if(norm[i]>0.05)out[i]/=norm[i];else out[i]=0;
+  const b=c.createBuffer(1,outLen,sr);b.copyToChannel(out,0);return b;
+}
+const fxCache=new WeakMap();
+function fxBuffer(buf,effect){
+  let m=fxCache.get(buf);if(!m){m={};fxCache.set(buf,m);}
+  if(!m[effect]){
+    if(effect==='dev')m[effect]=pitchShift(buf,0.62,0.92);
+    else if(effect==='sincap')m[effect]=pitchShift(buf,1.95,1.3);
+    else m[effect]=buf;
+  }
+  return m[effect];
+}
+
+/* ---------- Ses değiştirici ---------- */
+function playVoice(buf,gainVal,effect){
+  const c=getCtx();
+  return new Promise(res=>{
+    const src=c.createBufferSource();src.buffer=fxBuffer(buf,effect);
+    const g=c.createGain();g.gain.value=gainVal;
+    let out=g,tail=0,osc=null;
+    if(effect==='sincap'){
+      const hp=c.createBiquadFilter();hp.type='highpass';hp.frequency.value=350;
+      const pk=c.createBiquadFilter();pk.type='peaking';pk.frequency.value=3200;pk.gain.value=6;
+      src.connect(hp);hp.connect(pk);pk.connect(g);
+    }else if(effect==='dev'){
+      const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2600;
+      const bs=c.createBiquadFilter();bs.type='lowshelf';bs.frequency.value=180;bs.gain.value=6;
+      src.connect(lp);lp.connect(bs);bs.connect(g);
+    }else src.connect(g);
+    if(effect==='robot'){
+      src.playbackRate.value=0.95;g.gain.value=gainVal*1.4;
+      const rm=c.createGain();rm.gain.value=0;
+      osc=c.createOscillator();osc.frequency.value=55;osc.connect(rm.gain);
+      g.connect(rm);out=rm;osc.start();
+    }
+    if(effect==='tunel'){
+      const dl=c.createDelay(1.0);dl.delayTime.value=0.3;
+      const fb=c.createGain();fb.gain.value=0.45;
+      const wet=c.createGain();wet.gain.value=0.7;
+      g.connect(dl);dl.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(c.destination);tail=1.6;
+    }
+    out.connect(c.destination);
+    src.onended=()=>{if(osc)osc.stop();setTimeout(res,tail*1000+100);};
+    src.start();
+  });
+}
+
+/* ---------- Efekt sesleri ---------- */
+function noiseBuffer(sec){const c=getCtx(),b=c.createBuffer(1,Math.floor(c.sampleRate*sec),c.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;return b;}
+function env(g,t,a,h,r,p){g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(p,t+a);g.gain.setValueAtTime(p,t+a+h);g.gain.linearRampToValueAtTime(0,t+a+h+r);}
+const SFX={
+  duduk(){const c=getCtx(),t=c.currentTime,f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=1800;
+    const g=c.createGain();env(g,t,0.08,1.0,0.3,0.18);f.connect(g);g.connect(c.destination);
+    [311,370,466].forEach(fr=>{const o=c.createOscillator();o.type='sawtooth';o.frequency.value=fr;o.connect(f);o.start(t);o.stop(t+1.5);});return 1500;},
+  /* Buharlı lokomotif kalkışı v2: pşşş + pürüzlü buhar çufları + sürekli buhar + yankı */
+  cufcuf(){
+    const c=getCtx(),sr=c.sampleRate,t0=c.currentTime+0.05;
+    /* Pürüzlü buhar gürültüsü: beyaz gürültü, 15-40 Hz'lik rastgele dalgalanmayla modüle edilir (türbülans) */
+    const len=Math.floor(sr*4),rough=c.createBuffer(1,len,sr),rd=rough.getChannelData(0);
+    let m=0.7,target=0.7;
+    for(let i=0;i<len;i++){
+      if(i%Math.floor(sr/30)===0)target=0.35+Math.random()*0.65;
+      m+=(target-m)*0.004;
+      rd[i]=(Math.random()*2-1)*m;
+    }
+    /* Açık hava yankısı (sentetik oda yanıtı) */
+    const irLen=Math.floor(sr*1.6),ir=c.createBuffer(2,irLen,sr);
+    for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<irLen;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/irLen,3.5);}
+    const conv=c.createConvolver();conv.buffer=ir;
+    const wet=c.createGain();wet.gain.value=0.22;
+    const dry=c.createGain();dry.gain.value=0.85;
+    const bus=c.createGain();bus.gain.value=1;
+    const comp=c.createDynamicsCompressor();comp.threshold.value=-16;comp.ratio.value=3;
+    bus.connect(dry);bus.connect(conv);conv.connect(wet);
+    dry.connect(comp);wet.connect(comp);
+    const master=c.createGain();master.gain.value=1;comp.connect(master);master.connect(c.destination);
+    function steam(t,att,hold,dur,type,f1,f2,q,peak){
+      const s=c.createBufferSource();s.buffer=rough;
+      const f=c.createBiquadFilter();f.type=type;f.Q.value=q;
+      f.frequency.setValueAtTime(f1,t);if(f2)f.frequency.linearRampToValueAtTime(f2,t+dur);
+      const g=c.createGain();g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(peak,t+att);
+      g.gain.setValueAtTime(peak,t+att+hold);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+att+hold+dur);
+      s.connect(f);f.connect(g);g.connect(bus);
+      s.start(t,Math.random()*2);s.stop(t+att+hold+dur+0.05);
+    }
+    /* 1. Kalkış: buhar fışkırması "pşşşş" (beğenilen kısım, aynen korundu) */
+    steam(t0,0.06,0.1,1.0,'highpass',2500,1200,0.5,0.35);
+    steam(t0,0.04,0.05,0.85,'bandpass',900,400,0.6,0.25);
+    /* 2. Çuflar: her biri küçük bir pşşş. Yavaştan hızlıya, 4'lü vurgu */
+    const n=16,accent=[1,0.72,0.88,0.66];
+    let t=t0+1.15;
+    for(let i=0;i<n;i++){
+      const k=i/(n-1);
+      const period=0.9-0.66*Math.pow(k,0.6);      // 0.9 sn'den 0.24 sn'ye
+      const a=accent[i%4]*(0.88+Math.random()*0.24);
+      const body=Math.min(0.75,period*0.8);
+      const tt=t+(Math.random()-0.5)*0.02;
+      steam(tt,0.012,0.025,body,'bandpass',700,520,0.55,0.55*a);          // "çuf" gövdesi
+      steam(tt+0.005,0.02,0.02,body*1.1,'highpass',1700,1100,0.5,0.42*a);  // buhar tıslaması
+      steam(tt,0.006,0.0,0.12,'bandpass',200,null,0.9,0.28*a);             // basınç darbesi
+      t+=period;
+    }
+    const end=t;
+    /* 3. Çuflar arasında hiç kesilmeyen ince buhar sızıntısı */
+    steam(t0+1.1,0.8,end-t0-2.2,0.8,'highpass',2200,null,0.5,0.06);
+    /* 4. Ray tıkırtısı "taka-tuk" (hafif) */
+    let r=t0+3.2;
+    while(r<end-0.4){
+      const k=(r-t0)/(end-t0);
+      [0,0.1].forEach(d=>steam(r+d,0.002,0,0.05,'bandpass',2400,null,5,0.14));
+      r+=1.2-0.55*k;
+    }
+    /* 5. Sönümlenme */
+    master.gain.setValueAtTime(1,end-0.7);
+    master.gain.linearRampToValueAtTime(0.0001,end+0.4);
+    return (end-c.currentTime)*1000+700;
+  },
+  korna(){const c=getCtx(),t0=c.currentTime;
+    [0,0.35].forEach(dt=>{const g=c.createGain();env(g,t0+dt,0.01,0.2,0.05,0.12);g.connect(c.destination);
+      [400,500].forEach(fr=>{const o=c.createOscillator();o.type='square';o.frequency.value=fr;o.connect(g);o.start(t0+dt);o.stop(t0+dt+0.3);});});return 800;},
+  roket(){const c=getCtx(),t=c.currentTime,s=c.createBufferSource();s.buffer=noiseBuffer(3);
+    const f=c.createBiquadFilter();f.type='lowpass';f.frequency.setValueAtTime(200,t);f.frequency.exponentialRampToValueAtTime(3000,t+2.5);
+    const g=c.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.7,t+1.8);g.gain.linearRampToValueAtTime(0,t+3);
+    s.connect(f);f.connect(g);g.connect(c.destination);s.start(t);s.stop(t+3);return 3000;},
+  ding(){const c=getCtx(),t=c.currentTime;
+    [784,988,1319].forEach((fr,i)=>{const o=c.createOscillator();o.type='sine';o.frequency.value=fr;
+      const g=c.createGain();env(g,t+i*0.12,0.01,0.05,0.35,0.25);o.connect(g);g.connect(c.destination);
+      o.start(t+i*0.12);o.stop(t+i*0.12+0.5);});return 800;}
+};
+function sfx(name){const ms=SFX[name]();return new Promise(r=>setTimeout(r,ms));}
+
+/* ---------- Konuşma tanıma ---------- */
+function recognizeOnce(timeoutMs){
+  timeoutMs=timeoutMs||7000;
+  return new Promise(res=>{
+    if(!SR){log('Konuşma tanıma bu tarayıcıda yok');return res([]);}
+    const r=new SR();r.lang='tr-TR';r.interimResults=false;r.maxAlternatives=5;r.continuous=false;
+    let done=false,to=null;
+    const fin=v=>{if(done)return;done=true;parentSkip=null;parentAlt=null;clearTimeout(to);try{r.abort();}catch(e){}res(v);};
+    r.onresult=e=>{const a=[];for(let i=0;i<e.results[0].length;i++)a.push(e.results[0][i].transcript);fin(a);};
+    r.onerror=e=>{log('Tanıma hatası: '+e.error);fin([]);};
+    r.onend=()=>fin([]);
+    parentSkip=()=>fin(['__parent__']);
+    parentAlt=()=>fin(['__parent2__']);
+    to=setTimeout(()=>fin([]),timeoutMs);
+    try{r.start();}catch(e){log('Tanıma başlatılamadı: '+e.message);fin([]);}
+  });
+}
+function norm(s){return (s||'').toLocaleLowerCase('tr-TR').replace(/[^a-zçğıöşü\s]/g,' ').trim();}
+function lev(a,b){const m=a.length,n=b.length,dp=[];for(let i=0;i<=m;i++){dp[i]=[i];}for(let j=1;j<=n;j++)dp[0][j]=j;
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return dp[m][n];}
+function matchChoice(alts,options){
+  if(alts[0]==='__parent__')return {id:options[0].id,score:1,parent:true};
+  let best=null,bs=0;
+  alts.forEach(a=>norm(a).split(/\s+/).forEach(w=>{if(!w)return;
+    options.forEach(o=>o.words.forEach(ow=>{const sc=1-lev(w,ow)/Math.max(w.length,ow.length);if(sc>bs){bs=sc;best=o.id;}}));}));
+  return bs>=0.5?{id:best,score:bs}:null;
+}
+
+/* =========================================================
+   HİKAYE MOTORU
+   Düğüm türleri:
+   {t:'say', x:'metin'}                      anlatıcı konuşur
+   {t:'sfx', s:'duduk'}                      efekt sesi
+   {t:'task', x:'istek', h:'he... ce', fx:'dev', a:'sonrası'}  çocuk söyler
+   {t:'choice', x:'soru', r:'tekrar', o:[{w:[..], go:'sahne', x:'onay'}]}
+   {t:'go', to:'sahne'}                      başka sahneye geç
+   ========================================================= */
+let said=0,tasksTotal=0,stopped=false;
+const PRAISE=['Aferin sana!','Harika!','Süpersin!','Bravo!','Çok güzel söyledin!','İşte bu!'];
+const SOFT=['Olsun, bir dahaki sefere birlikte söyleriz. Devam!','Sorun değil, yolumuza devam edelim!','Peki, sonra tekrar deneriz. Hadi devam!'];
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function dot(on){$('dot').className=on?'on':'';}
+function checkStop(){if(stopped)throw new Error('__stop__');}
+
+/* Koro efekti: çocuğun sesi kalın, normal ve ince tonda aynı anda (bütün yolcular birlikte) */
+const _playVoice=playVoice;
+playVoice=function(buf,gainVal,effect){
+  if(effect!=='koro')return _playVoice(buf,gainVal,effect);
+  const d=(ms,fn)=>new Promise(r=>setTimeout(()=>fn().then(r),ms));
+  return Promise.all([
+    _playVoice(buf,gainVal*0.7,'normal'),
+    d(45,()=>_playVoice(buf,gainVal*0.6,'dev')),
+    d(90,()=>_playVoice(buf,gainVal*0.5,'sincap'))
+  ]);
+};
+
+async function runTask(n){
+  tasksTotal++;
+  await say(n.x);checkStop();
+  dot(true);let r=await listenAndRecord();dot(false);checkStop();
+  if(r.result==='timeout'){
+    await say('Benimle söyle.');
+    await say(n.h,{rate:VS.rate*0.7});
+    await say('Hadi sen!');checkStop();
+    dot(true);r=await listenAndRecord();dot(false);checkStop();
+  }
+  if(r.result==='voice'||r.result==='parent'||r.result==='parent2'){
+    said++;
+    await sfx('ding');checkStop();
+    if(r.buf&&n.fx&&n.fx!=='none')await playVoice(r.buf,r.gain,n.fx);
+    checkStop();
+    await say(n.a||pick(PRAISE));
+  }else{
+    if(r.result==='nomic')log('Mikrofon yok, görev atlandı');
+    await say(pick(SOFT));
+  }
+}
+
+async function runChoice(n){
+  let chosen=null;
+  for(let i=1;i<=2&&!chosen;i++){
+    await say(i===1?n.x:n.r);checkStop();
+    if(SR){
+      stopMic();dot(true);
+      const alts=await recognizeOnce(7000);dot(false);checkStop();
+      log('Seçimde duyulan: '+(alts.join(' | ')||'(hiçbir şey)'));
+      if(alts[0]==='__parent__')chosen=n.o[0];
+      else if(alts[0]==='__parent2__')chosen=n.o[1];
+      else{const m=matchChoice(alts,n.o.map((o,k)=>({id:k,words:o.w})));if(m)chosen=n.o[m.id];}
+    }else{
+      dot(true);const rr=await listenAndRecord({maxWait:6000});dot(false);checkStop();
+      if(rr.result==='parent')chosen=n.o[0];
+      else if(rr.result==='parent2')chosen=n.o[1];
+      else break;
+    }
+  }
+  if(!chosen){chosen=pick(n.o);await say('Hmm, sanırım '+chosen.w[0]+' dedin!');}
+  else said++;
+  checkStop();
+  if(chosen.x)await say(chosen.x);
+  return chosen.go;
+}
+
+async function runStory(story){
+  said=0;tasksTotal=0;stopped=false;
+  let scene='start',guard=0;
+  while(scene&&guard++<50){
+    const nodes=story.scenes[scene];
+    if(!nodes){log('Sahne bulunamadı: '+scene);break;}
+    let next=null;
+    for(const n of nodes){
+      checkStop();
+      if(n.t==='say')await say(n.x);
+      else if(n.t==='sfx')await sfx(n.s);
+      else if(n.t==='task')await runTask(n);
+      else if(n.t==='choice'){next=await runChoice(n);break;}
+      else if(n.t==='go'){next=n.to;break;}
+    }
+    scene=next;
+  }
+  checkStop();
+  await sfx('ding');
+  await say('Bugün tam '+said+' kere konuştun. '+story.ending);
+  await sfx('duduk');
+}
+
+/* =========================================================
+   HİKAYELER
+   ========================================================= */
+const STORIES=[];
+
+STORIES.push({
+  id:'cufcuf', icon:'🚂', title:'Çuf Çuf Tren', desc:'Hayvan yolcuları toplayıp pikniğe gidiyoruz',
+  ending:'Harika bir makinisttin! Düdük seni çok sevdi.',
+  scenes:{
+  start:[
+    {t:'sfx',s:'duduk'},
+    {t:'say',x:'Merhaba küçük makinist! Ben Düdük, çuf çuf tren.'},
+    {t:'say',x:'Bugün hayvan arkadaşlarımızı alıp büyük pikniğe götüreceğiz. Ama önce beni çalıştırman lazım.'},
+    {t:'task',x:'Benim gibi söyle: çuf çuf!',h:'çuf... çuf',fx:'dev',a:'İşte bu! Tam benim sesim gibi!'},
+    {t:'sfx',s:'cufcuf'},
+    {t:'say',x:'Yola çıktık! Aaa, rayların üstünde bir inek duruyor. Onu uyaralım.'},
+    {t:'task',x:'Düdüğü öttür: düt düüüt!',h:'düt... düüüt',fx:'sincap',a:'İnek kenara çekildi. Teşekkürler!'},
+    {t:'sfx',s:'duduk'},
+    {t:'say',x:'İlk durak geldi: Çiftlik!'},
+    {t:'task',x:'Kapıyı açmak için sihirli kelimeyi söyle: aç!',h:'aç',fx:'tunel',a:'Gıcırrr... Kapı açıldı!'},
+    {t:'say',x:'Çiftlikte biri bizi bekliyor. Miyav miyav... Bu kim acaba?'},
+    {t:'task',x:'Onu çağır: kedi!',h:'ke... di',fx:'normal',a:'Evet, kedi! Kedi trene bindi.'},
+    {t:'task',x:'Şimdi kedi gibi miyavla: miyav!',h:'mi... yav',fx:'sincap',a:'Bak, kedi senin sesinle miyavlıyor!'},
+    {t:'say',x:'Bir de köpek gelmiş. Kuyruğunu sallıyor.'},
+    {t:'task',x:'Köpek gibi havla: hav hav!',h:'hav... hav',fx:'dev',a:'Ne kocaman bir hav hav!'},
+    {t:'task',x:'Şimdi onun adını söyle: köpek!',h:'kö... pek',fx:'normal',a:'Köpek de bindi. Yolcularımız çoğalıyor!'},
+    {t:'sfx',s:'cufcuf'},
+    {t:'choice',x:'Şimdi nereye gidelim? Ormana mı, göle mi?',r:'Orman mı, göl mü? Söyle bakalım!',o:[
+      {w:['orman','ormana','ormanı','oman','orma'],go:'orman',x:'Ormana gidiyoruz!'},
+      {w:['göl','göle','gölü','gol','göller'],go:'gol',x:'Göle gidiyoruz!'}]}
+  ],
+  orman:[
+    {t:'say',x:'Ormana giderken önümüze karanlık bir tünel çıktı. Uuu...'},
+    {t:'task',x:'Tünelde seslen: merhaba!',h:'mer... ha... ba',fx:'tunel',a:'Tünel sesini geri yolladı!'},
+    {t:'sfx',s:'cufcuf'},
+    {t:'say',x:'Ormana geldik. Ağaçta küçük bir sincap var.'},
+    {t:'task',x:'Sincap gibi cikla: cik cik!',h:'cik... cik',fx:'sincap',a:'Sincap sana cevap verdi!'},
+    {t:'say',x:'Ağaçların arkasından kocaman biri çıktı. Hımmm... Bu bir ayı!'},
+    {t:'task',x:'Ayıya selam ver. Söyle: ayı!',h:'a... yı',fx:'dev',a:'Ayı da sana selam verdi!'},
+    {t:'say',x:'Ayının karnı guruldadı. Çok acıkmış.'},
+    {t:'choice',x:'Ona ne verelim? Bal mı, elma mı?',r:'Bal mı, elma mı?',o:[
+      {w:['bal','balı','pal','ba'],go:'bal'},
+      {w:['elma','elmayı','ema','elam','alma'],go:'elma'}]}
+  ],
+  bal:[
+    {t:'task',x:'Bal de, ayı balı alsın!',h:'bal',fx:'dev',a:'Ayı bayıldı! Mmm, ne tatlı bal!'},
+    {t:'go',to:'orman2'}
+  ],
+  elma:[
+    {t:'task',x:'Elma de, ayı elmayı alsın!',h:'el... ma',fx:'dev',a:'Kıtır kıtır! Ayı elmayı çok sevdi!'},
+    {t:'go',to:'orman2'}
+  ],
+  orman2:[
+    {t:'say',x:'Sincap ve ayı da trene bindi.'},
+    {t:'task',x:'Herkese söyle: hadi gidelim!',h:'ha... di... gi... de... lim',fx:'koro',a:'Bütün yolcular seninle bağırdı!'},
+    {t:'sfx',s:'cufcuf'},
+    {t:'go',to:'tepe'}
+  ],
+  gol:[
+    {t:'say',x:'Göle vardık. Su pırıl pırıl parlıyor.'},
+    {t:'task',x:'Bu ne? Söyle: su!',h:'su',fx:'normal',a:'Evet, su! Şırıl şırıl.'},
+    {t:'say',x:'Suda yüzen biri var. Vak vak... Bu bir ördek!'},
+    {t:'task',x:'Ördek gibi vakla: vak vak!',h:'vak... vak',fx:'sincap',a:'Ördek seninle şarkı söylüyor!'},
+    {t:'task',x:'Onun adını söyle: ördek!',h:'ör... dek',fx:'normal',a:'Ördek trene bindi. Kanatlarını çırpıyor!'},
+    {t:'say',x:'Taşın üstünde yeşil biri zıplıyor. Vıraak!'},
+    {t:'task',x:'Kurbağa gibi söyle: vırak!',h:'vı... rak',fx:'dev',a:'Kocaman bir kurbağa sesi!'},
+    {t:'task',x:'Şimdi zor bir kelime: kurbağa!',h:'kur... ba... ğa',fx:'normal',a:'Süpersin! Kurbağa da bindi.'},
+    {t:'sfx',s:'cufcuf'},
+    {t:'go',to:'tepe'}
+  ],
+  tepe:[
+    {t:'say',x:'Aaa! Önümüzde dik bir yokuş var. Tren yavaşladı.'},
+    {t:'say',x:'Çuf... çuf... Çok zor! Bana yardım eder misin?'},
+    {t:'task',x:'Hep birlikte söyleyelim: hadi hadi!',h:'ha... di... ha... di',fx:'koro',a:'Yaşasın! Yokuşu çıktık!'},
+    {t:'sfx',s:'cufcuf'},
+    {t:'say',x:'Ama birden bir ses geldi. Tangır tungur! Bir tekerlek gevşedi.'},
+    {t:'task',x:'Çekiçle vur, tamir edelim: tak tak!',h:'tak... tak',fx:'robot',a:'Tamirci robot senin sesinle konuştu. Tekerlek düzeldi!'},
+    {t:'sfx',s:'duduk'},
+    {t:'say',x:'İkinci durak: Köy! Burada da yolcular var.'},
+    {t:'task',x:'Kuzu gibi söyle: meee!',h:'meee',fx:'sincap',a:'Minik kuzu seni çok sevdi!'},
+    {t:'task',x:'Onun adını söyle: kuzu!',h:'ku... zu',fx:'normal',a:'Kuzu trene bindi.'},
+    {t:'task',x:'İnek gibi söyle: möö!',h:'möö',fx:'dev',a:'Kocaman bir möö!'},
+    {t:'task',x:'Şimdi uzun bir cümle. Söyle: yolcular binsin!',h:'yol... cu... lar... bin... sin',fx:'koro',a:'Herkes bindi! Tren dopdolu oldu!'},
+    {t:'sfx',s:'cufcuf'},
+    {t:'say',x:'Ve sonunda... Piknik alanına geldik!'},
+    {t:'choice',x:'Piknikte ne yapalım? Top mu oynayalım, şarkı mı söyleyelim?',r:'Top mu, şarkı mı?',o:[
+      {w:['top','topu','tob','dop','to'],go:'top'},
+      {w:['şarkı','sarkı','şarki','şaki','şakı','şarkıyı'],go:'sarki'}]}
+  ],
+  top:[
+    {t:'task',x:'Topu at, de ki: hop!',h:'hop',fx:'sincap',a:'Top havaya uçtu! Köpek topu yakaladı.'},
+    {t:'task',x:'Topun adını söyle: top!',h:'top',fx:'normal',a:'Ne güzel oyun!'},
+    {t:'go',to:'son'}
+  ],
+  sarki:[
+    {t:'task',x:'Benimle şarkı söyle: la la la!',h:'la... la... la',fx:'koro',a:'Bütün hayvanlar seninle şarkı söylüyor!'},
+    {t:'task',x:'Şimdi daha uzun: tralala!',h:'tra... la... la',fx:'sincap',a:'Kuşlar bile dans etti!'},
+    {t:'go',to:'son'}
+  ],
+  son:[
+    {t:'say',x:'Piknik bitti. Şimdi herkesi eve götürme zamanı.'},
+    {t:'sfx',s:'cufcuf'},
+    {t:'say',x:'İstasyona vardık. Yolcular iniyor.'},
+    {t:'task',x:'Yolculara söyle: güle güle!',h:'gü... le... gü... le',fx:'koro',a:'Hayvanlar da sana güle güle dedi!'},
+    {t:'task',x:'Bana da bir şey söyle: teşekkürler Düdük!',h:'te... şek... kür... ler',fx:'dev',a:'Rica ederim, küçük makinist!'}
+  ]
+  }
+});
+
+const COMING=[
+  {icon:'🚄',title:'Şimşek Hızlı Tren',desc:'Büyük yarış'},
+  {icon:'🚇',title:'Metronun Sırrı',desc:'Yer altında macera'},
+  {icon:'🚗',title:'Kırmızı Araba',desc:'Kaybolan araba'},
+  {icon:'🚀',title:'Ay\'a Yolculuk',desc:'Roketle uzaya'}
+];
+
+/* =========================================================
+   ARAYÜZ
+   ========================================================= */
+function renderList(){
+  let h='';
+  STORIES.forEach((s,i)=>{h+='<div class="story"><div class="ic">'+s.icon+'</div><div class="tx"><b>'+s.title+'</b><span>'+s.desc+'</span></div><button data-i="'+i+'">Başla</button></div>';});
+  COMING.forEach(s=>{h+='<div class="story off"><div class="ic">'+s.icon+'</div><div class="tx"><b>'+s.title+'</b><span>Yakında</span></div></div>';});
+  $('storyList').innerHTML=h;
+  $('storyList').querySelectorAll('button[data-i]').forEach(b=>b.onclick=()=>play(STORIES[+b.dataset.i]));
+}
+
+let wakeLock=null;
+async function play(story){
+  if(busy)return;busy=true;
+  getCtx();
+  $('stage').style.display='block';
+  try{if('wakeLock' in navigator)wakeLock=await navigator.wakeLock.request('screen');}catch(e){}
+  const t0=Date.now();let ok=true;
+  try{
+    if(!await startMic()){await say('Mikrofon açılamadı.');ok=false;}
+    else await runStory(story);
+  }catch(e){
+    if(e.message!=='__stop__'){log('Oyun hatası: '+e.message);ok=false;}
+    else ok=false;
+  }finally{
+    stopped=true;try{speechSynthesis.cancel();}catch(e){}
+    stopMic();dot(false);
+    $('stage').style.display='none';busy=false;
+    try{if(wakeLock)wakeLock.release();}catch(e){}
+    const min=Math.round((Date.now()-t0)/60000);
+    $('summary').style.display='block';
+    $('summary').innerHTML='<b>'+story.icon+' '+story.title+'</b> '+(ok?'tamamlandı':'yarıda bırakıldı')+
+      '<br>Süre: '+min+' dk • Konuştuğu görev: '+said+' / '+tasksTotal;
+    window.scrollTo(0,0);
+  }
+}
+
+let lastExitTap=0;
+$('exitZone').onclick=()=>{
+  const now=Date.now();
+  if(now-lastExitTap<800){log('Ebeveyn çıkışı');stopped=true;try{speechSynthesis.cancel();}catch(e){}if(parentSkip)parentSkip();}
+  lastExitTap=now;
+};
+$('secretR').onclick=()=>{if(parentSkip){log('Ebeveyn: devam / 1. seçenek');parentSkip();}};
+$('secretL').onclick=()=>{
+  if(parentAlt){log('Ebeveyn: 2. seçenek');parentAlt();}
+  else if(parentSkip){log('Ebeveyn: devam');parentSkip();}
+};
+document.addEventListener('click',()=>{if(ctx&&ctx.state!=='running')ctx.resume();},true);
+$('btnMic').onclick=()=>{log('Mikrofon isteniyor...');startMic();};
+$('sens').oninput=e=>{sens=+e.target.value;$('sensVal').textContent=sens;updateThreshold();};
+$('btnRandom').onclick=()=>play(pick(STORIES));
+
+function showSupport(){
+  const a=[];
+  a.push('Türkçe anlatıcı: '+(trVoice?'var ('+trVoice.name+')':'bulunamadı'));
+  a.push('Kayıt: '+(window.MediaRecorder?'var':'yok'));
+  a.push('Konuşma tanıma: '+(SR?'var':'yok'));
+  $('support').textContent=a.join(' • ');
+}
+function renderVoices(){
+  const sel=$('voiceSel');
+  if(!trVoices.length){sel.innerHTML='<option>Türkçe ses bulunamadı</option>';$('voiceHint').textContent='Telefon ayarlarından Türkçe ses verisini indir (aşağıdaki talimat).';return;}
+  sel.innerHTML=trVoices.map((v,i)=>'<option value="'+i+'"'+(v===trVoice?' selected':'')+'>'+v.name+(v.localService?'':' (internet)')+'</option>').join('');
+  $('voiceHint').textContent=trVoices.length+' Türkçe ses bulundu.'+(trVoices.length===1?' Daha fazla ses için telefon ayarlarından seçim yapabilirsin.':'');
+}
+function renderSliders(){$('rate').value=VS.rate;$('pitch').value=VS.pitch;$('rateVal').textContent=VS.rate.toFixed(2);$('pitchVal').textContent=VS.pitch.toFixed(2);}
+$('voiceSel').onchange=e=>{trVoice=trVoices[+e.target.value]||trVoice;VS.name=trVoice?trVoice.name:'';saveVS();say('Merhaba küçük makinist! Ben Düdük, çuf çuf tren.');};
+$('rate').oninput=e=>{VS.rate=+e.target.value;saveVS();renderSliders();};
+$('pitch').oninput=e=>{VS.pitch=+e.target.value;saveVS();renderSliders();};
+$('btnVoice').onclick=()=>say('Merhaba küçük makinist! Ben Düdük, çuf çuf tren. Bugün hayvan arkadaşlarımızı alıp pikniğe gideceğiz.');
+renderSliders();
+renderVoices();
+renderList();
+showSupport();
+log('Sayfa hazır (Faz 2.1)');
+</script>
+</body>
+</html>
