@@ -90,6 +90,7 @@ details summary{cursor:pointer;color:var(--blue);font-size:14px}
 <div class="card">
   <details><summary>Teknik günlük</summary>
     <div class="small" id="support" style="margin-top:8px"></div>
+    <div id="sfxBtns" style="margin-top:8px"></div>
     <div id="log"></div>
   </details>
 </div>
@@ -373,6 +374,60 @@ const SFX={
     const f=c.createBiquadFilter();f.type='lowpass';f.frequency.setValueAtTime(200,t);f.frequency.exponentialRampToValueAtTime(3000,t+2.5);
     const g=c.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.7,t+1.8);g.gain.linearRampToValueAtTime(0,t+3);
     s.connect(f);f.connect(g);g.connect(c.destination);s.start(t);s.stop(t+3);return 3000;},
+  /* Hızlı tren geçişi: yaklaşan ve uzaklaşan rüzgar + motor uğultusu (Doppler) */
+  hizli(){const c=getCtx(),t=c.currentTime,D=2.6;
+    const s=c.createBufferSource();s.buffer=noiseBuffer(3);
+    const f=c.createBiquadFilter();f.type='bandpass';f.Q.value=0.7;
+    f.frequency.setValueAtTime(400,t);f.frequency.exponentialRampToValueAtTime(2200,t+D*0.5);f.frequency.exponentialRampToValueAtTime(500,t+D);
+    const g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.8,t+D*0.5);g.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    s.connect(f);f.connect(g);g.connect(c.destination);s.start(t);s.stop(t+D);
+    const o=c.createOscillator();o.type='sawtooth';
+    o.frequency.setValueAtTime(240,t);o.frequency.setValueAtTime(240,t+D*0.45);o.frequency.linearRampToValueAtTime(170,t+D*0.6);
+    const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=900;
+    const og=c.createGain();og.gain.setValueAtTime(0.0001,t);og.gain.exponentialRampToValueAtTime(0.12,t+D*0.5);og.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    o.connect(lp);lp.connect(og);og.connect(c.destination);o.start(t);o.stop(t+D);
+    return D*1000+100;},
+  /* Metro kapısı: ding-dong + havalı kapı tıslaması + kapanma tok sesi */
+  kapi(){const c=getCtx(),t=c.currentTime;
+    [[659,0],[523,0.35]].forEach(([fr,dt])=>{const o=c.createOscillator();o.type='sine';o.frequency.value=fr;
+      const g=c.createGain();env(g,t+dt,0.01,0.05,0.5,0.25);o.connect(g);g.connect(c.destination);o.start(t+dt);o.stop(t+dt+0.6);});
+    const th=t+0.95,s=c.createBufferSource();s.buffer=noiseBuffer(1);
+    const f=c.createBiquadFilter();f.type='highpass';f.frequency.value=2000;
+    const g=c.createGain();g.gain.setValueAtTime(0.0001,th);g.gain.exponentialRampToValueAtTime(0.3,th+0.05);g.gain.exponentialRampToValueAtTime(0.0001,th+0.6);
+    s.connect(f);f.connect(g);g.connect(c.destination);s.start(th);s.stop(th+0.7);
+    const o=c.createOscillator();o.type='sine';o.frequency.setValueAtTime(120,th+0.6);o.frequency.exponentialRampToValueAtTime(50,th+0.8);
+    const g2=c.createGain();env(g2,th+0.6,0.005,0.02,0.15,0.4);o.connect(g2);g2.connect(c.destination);o.start(th+0.6);o.stop(th+0.85);
+    return 1900;},
+  /* Fren gıcırtısı */
+  fren(){const c=getCtx(),t=c.currentTime,D=1.5;
+    const o=c.createOscillator();o.type='triangle';o.frequency.setValueAtTime(2600,t);o.frequency.linearRampToValueAtTime(2100,t+D);
+    const lfo=c.createOscillator();lfo.frequency.value=18;const lg=c.createGain();lg.gain.value=60;lfo.connect(lg);lg.connect(o.frequency);
+    const g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.12,t+0.15);g.gain.setValueAtTime(0.12,t+D-0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    o.connect(g);g.connect(c.destination);o.start(t);lfo.start(t);o.stop(t+D);lfo.stop(t+D);
+    const s=c.createBufferSource();s.buffer=noiseBuffer(2);const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=3000;f.Q.value=2;
+    const ng=c.createGain();ng.gain.setValueAtTime(0.0001,t);ng.gain.exponentialRampToValueAtTime(0.15,t+0.1);ng.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    s.connect(f);f.connect(ng);ng.connect(c.destination);s.start(t);s.stop(t+D);
+    return D*1000+100;},
+  /* Araba motoru: marş + rölanti + gaz verme */
+  motor(){const c=getCtx(),t=c.currentTime,nb=noiseBuffer(1);
+    for(let i=0;i<5;i++){const s=c.createBufferSource();s.buffer=nb;const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=700;f.Q.value=1;
+      const g=c.createGain();const tt=t+i*0.11;env(g,tt,0.005,0.02,0.05,0.4);s.connect(f);f.connect(g);g.connect(c.destination);s.start(tt,Math.random()*0.5);s.stop(tt+0.1);}
+    const t1=t+0.6,D=2.4;
+    const o=c.createOscillator();o.type='sawtooth';
+    o.frequency.setValueAtTime(40,t1);o.frequency.linearRampToValueAtTime(55,t1+0.3);o.frequency.linearRampToValueAtTime(95,t1+1.1);o.frequency.linearRampToValueAtTime(50,t1+1.9);
+    const o2=c.createOscillator();o2.type='square';
+    o2.frequency.setValueAtTime(20,t1);o2.frequency.linearRampToValueAtTime(27,t1+0.3);o2.frequency.linearRampToValueAtTime(47,t1+1.1);o2.frequency.linearRampToValueAtTime(25,t1+1.9);
+    const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.setValueAtTime(400,t1);lp.frequency.linearRampToValueAtTime(1200,t1+1.1);lp.frequency.linearRampToValueAtTime(450,t1+1.9);
+    const am=c.createGain();am.gain.value=0.5;const amd=c.createGain();amd.gain.value=0.5;o2.connect(amd);amd.connect(am.gain);
+    const g=c.createGain();g.gain.setValueAtTime(0.0001,t1);g.gain.exponentialRampToValueAtTime(0.35,t1+0.15);g.gain.setValueAtTime(0.35,t1+D-0.4);g.gain.exponentialRampToValueAtTime(0.0001,t1+D);
+    o.connect(lp);lp.connect(am);am.connect(g);g.connect(c.destination);
+    o.start(t1);o2.start(t1);o.stop(t1+D);o2.stop(t1+D);
+    return (t1-t+D)*1000+100;},
+  /* Uzay bilgisayarı bip bip */
+  bipbip(){const c=getCtx(),t=c.currentTime,notes=[880,1047,1175,1319,1568,1760];
+    for(let i=0;i<8;i++){const o=c.createOscillator();o.type=i%3?'sine':'square';o.frequency.value=notes[Math.floor(Math.random()*notes.length)];
+      const g=c.createGain();const tt=t+i*0.12;env(g,tt,0.005,0.06,0.03,i%3?0.18:0.07);o.connect(g);g.connect(c.destination);o.start(tt);o.stop(tt+0.12);}
+    return 1100;},
   ding(){const c=getCtx(),t=c.currentTime;
     [784,988,1319].forEach((fr,i)=>{const o=c.createOscillator();o.type='sine';o.frequency.value=fr;
       const g=c.createGain();env(g,t+i*0.12,0.01,0.05,0.35,0.25);o.connect(g);g.connect(c.destination);
@@ -615,20 +670,354 @@ STORIES.push({
   }
 });
 
-const COMING=[
-  {icon:'🚄',title:'Şimşek Hızlı Tren',desc:'Büyük yarış'},
-  {icon:'🚇',title:'Metronun Sırrı',desc:'Yer altında macera'},
-  {icon:'🚗',title:'Kırmızı Araba',desc:'Kaybolan araba'},
-  {icon:'🚀',title:'Ay\'a Yolculuk',desc:'Roketle uzaya'}
-];
+/* ---------------- 2. ŞİMŞEK HIZLI TREN ---------------- */
+STORIES.push({
+  id:'simsek', icon:'🚄', title:'Şimşek Hızlı Tren', desc:'Kartal ile büyük yarış',
+  ending:'Gerçek bir şampiyonsun! Şimşek seninle gurur duyuyor.',
+  scenes:{
+  start:[
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Merhaba şampiyon! Ben Şimşek, dünyanın en hızlı treni.'},
+    {t:'task',x:'Benim adımı söyle: Şimşek!',h:'şim... şek',fx:'normal',a:'Evet, ben Şimşek! Vınnn!'},
+    {t:'say',x:'Bugün büyük yarış var. Rakibimiz Kartal, gökyüzünde uçarak bizimle yarışacak.'},
+    {t:'task',x:'Motorumu çalıştır. Söyle: vın!',h:'vın',fx:'dev',a:'Motorum gürledi!'},
+    {t:'say',x:'Yarış başlamak üzere. Hakem sayıyor: üç, iki, bir...'},
+    {t:'task',x:'Şimdi sen bağır: başla!',h:'baş... la',fx:'koro',a:'Bütün seyirciler seninle bağırdı!'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Rüzgar gibi gidiyoruz! Kartal da yanımızda uçuyor.'},
+    {t:'task',x:'Daha hızlı gitmek için söyle: hızlı!',h:'hız... lı',fx:'sincap',a:'Vınnn! Kartalı geçtik!'},
+    {t:'say',x:'Kartal bağırdı: Kiyaaak! Beni geçemezsin!'},
+    {t:'task',x:'Kartal gibi bağır: kiyak!',h:'ki... yak',fx:'sincap',a:'Kartal bile şaşırdı!'},
+    {t:'choice',x:'Önümüzde iki yol var. Köprüden mi geçelim, tünelden mi?',r:'Köprü mü, tünel mi?',o:[
+      {w:['köprü','köprüden','köprüye','kopru','köpü','köprüyü'],go:'kopru',x:'Köprüden geçiyoruz!'},
+      {w:['tünel','tünelden','tünele','tunel','tüne','tüneli'],go:'tunel',x:'Tünele giriyoruz!'}]}
+  ],
+  kopru:[
+    {t:'say',x:'Kocaman bir köprüdeyiz. Aşağıda masmavi bir şey var.'},
+    {t:'task',x:'Aşağıdaki şeyin adını söyle: deniz!',h:'de... niz',fx:'normal',a:'Evet, deniz! Dalgalar bize el sallıyor.'},
+    {t:'say',x:'Denizde bir gemi var. Düdüğünü çalıyor.'},
+    {t:'sfx',s:'duduk'},
+    {t:'task',x:'Gemiye selam ver: merhaba gemi!',h:'mer... ha... ba ... ge... mi',fx:'dev',a:'Gemi senin sesinle cevap verdi!'},
+    {t:'say',x:'Köprüde rüzgar çok sert esiyor.'},
+    {t:'task',x:'Rüzgar gibi üfle: fuuu!',h:'fuuu',fx:'tunel',a:'Rüzgarı arkamıza aldık, daha hızlıyız!'},
+    {t:'go',to:'orta'}
+  ],
+  tunel:[
+    {t:'say',x:'Uzun, karanlık bir tünele girdik. Kartal burada uçamaz, onu geçiyoruz!'},
+    {t:'task',x:'Tünelde bağır: yaşasın!',h:'ya... şa... sın',fx:'tunel',a:'Tünel de seninle sevindi!'},
+    {t:'say',x:'Karanlıkta farlarımı yakmam lazım.'},
+    {t:'task',x:'Söyle: ışık!',h:'ı... şık',fx:'normal',a:'Farlar yandı! Her yer aydınlandı.'},
+    {t:'task',x:'Tünelin sonunu görünce söyle: çıkış!',h:'çı... kış',fx:'sincap',a:'Tünelden çıktık!'},
+    {t:'go',to:'orta'}
+  ],
+  orta:[
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Aaa, raylarda bir sürü koyun var! Yolu kapatmışlar.'},
+    {t:'task',x:'Koyunlar ne der? Söyle: meee!',h:'meee',fx:'sincap',a:'Koyunlar sana cevap verdi!'},
+    {t:'task',x:'Düdüğü çal: düt düt!',h:'düt ... düt',fx:'sincap',a:'Koyunlar duydu!'},
+    {t:'sfx',s:'duduk'},
+    {t:'task',x:'Koyunlara söyle: çekilin!',h:'çe... ki... lin',fx:'dev',a:'Koyunlar meee diyerek kenara çekildi!'},
+    {t:'say',x:'Kartal yine öne geçti. Hızlanmalıyız!'},
+    {t:'task',x:'Hep birlikte söyleyelim: daha hızlı!',h:'da... ha ... hız... lı',fx:'koro',a:'Bütün yolcular seninle bağırdı!'},
+    {t:'sfx',s:'hizli'},
+    {t:'choice',x:'Şimdi nereden gidelim? Karlı dağdan mı, sıcak çölden mi?',r:'Dağ mı, çöl mü?',o:[
+      {w:['dağ','dağdan','dağa','dağı','karlı','kar'],go:'dag',x:'Karlı dağa tırmanıyoruz!'},
+      {w:['çöl','çölden','çöle','çölü','col','sıcak','çok'],go:'col',x:'Sıcak çöle gidiyoruz!'}]}
+  ],
+  dag:[
+    {t:'say',x:'Brrr, ne soğuk!'},
+    {t:'task',x:'Üşüyünce ne deriz? Söyle: brrr!',h:'brrr',fx:'sincap',a:'Brrr! Dişlerimiz takırdadı!'},
+    {t:'task',x:'Bu beyaz şey ne? Söyle: kar!',h:'kar',fx:'normal',a:'Evet, kar! Lapa lapa yağıyor.'},
+    {t:'say',x:'Karın içinde biri kayıyor. Kaydı, kaydı...'},
+    {t:'task',x:'Bu bir penguen! Söyle: penguen!',h:'pen... gu... en',fx:'sincap',a:'Penguen kanatlarını çırptı!'},
+    {t:'task',x:'Şimdi zor bir cümle. Söyle: kar topu at!',h:'kar ... to... pu ... at',fx:'koro',a:'Pof! Kar topu ağaca çarptı, her yere kar yağdı!'},
+    {t:'go',to:'final'}
+  ],
+  col:[
+    {t:'say',x:'Güneş tepemizde parlıyor.'},
+    {t:'task',x:'Söyle: sıcak!',h:'sı... cak',fx:'normal',a:'Ooof, çok sıcak!'},
+    {t:'say',x:'Uzaktan biri geliyor. Sırtında hörgüçleri var.'},
+    {t:'task',x:'Bu bir deve! Söyle: deve!',h:'de... ve',fx:'dev',a:'Deve sana göz kırptı!'},
+    {t:'task',x:'Devenin suyu bitmiş. Söyle: su ver!',h:'su ... ver',fx:'normal',a:'Lık lık lık... Deve suyunu içti, teşekkür etti!'},
+    {t:'task',x:'Şimdi zor bir cümle: çölde deve var!',h:'çöl... de ... de... ve ... var',fx:'koro',a:'Süpersin! Çok güzel söyledin!'},
+    {t:'go',to:'final'}
+  ],
+  final:[
+    {t:'say',x:'Bitiş çizgisi göründü! Kartal da hemen arkamızda!'},
+    {t:'task',x:'Son gücümüzle bağır: hadi Şimşek!',h:'ha... di ... şim... şek',fx:'koro',a:'Vınnnnn!'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Ve... bitiş çizgisini ilk biz geçtik! Kazandık!'},
+    {t:'task',x:'Sevinçle bağır: kazandık!',h:'ka... zan... dık',fx:'koro',a:'Seyirciler alkışlıyor!'},
+    {t:'choice',x:'Ödülümüz ne olsun? Kupa mı, madalya mı?',r:'Kupa mı, madalya mı?',o:[
+      {w:['kupa','kupayı','kuba','upa','kupalar'],go:'kupa'},
+      {w:['madalya','madalyayı','madaya','dalya','madalyon'],go:'madalya'}]}
+  ],
+  kupa:[
+    {t:'task',x:'Kupayı kaldır ve söyle: kupa!',h:'ku... pa',fx:'dev',a:'Parıl parıl bir kupa!'},
+    {t:'go',to:'son'}
+  ],
+  madalya:[
+    {t:'task',x:'Madalyanı tak ve söyle: madalya!',h:'ma... dal... ya',fx:'dev',a:'Altın madalya boynunda parlıyor!'},
+    {t:'go',to:'son'}
+  ],
+  son:[
+    {t:'say',x:'Kartal yanımıza geldi. Biraz üzgün.'},
+    {t:'task',x:'Kartala nazikçe söyle: aferin Kartal!',h:'a... fe... rin ... kar... tal',fx:'sincap',a:'Kartal çok sevindi. Teşekkürler dedi!'},
+    {t:'task',x:'Bana da söyle: teşekkürler Şimşek!',h:'te... şek... kür... ler ... şim... şek',fx:'dev',a:'Rica ederim şampiyon! Bir gün yine yarışalım!'}
+  ]
+  }
+});
+
+/* ---------------- 3. METRONUN SIRRI ---------------- */
+STORIES.push({
+  id:'metro', icon:'🚇', title:'Metronun Sırrı', desc:'Yer altındaki gizli kapı',
+  ending:'Metronun sırrını çözen kahraman sensin!',
+  scenes:{
+  start:[
+    {t:'sfx',s:'kapi'},
+    {t:'say',x:'Merhaba yolcu! Ben Minik, yer altında giden bir metro. Bugün sana bir sır göstereceğim.'},
+    {t:'say',x:'Ama önce bilet lazım. Turnike seni bekliyor.'},
+    {t:'task',x:'Turnikeye söyle: bip!',h:'bip',fx:'robot',a:'Bip! Turnike açıldı.'},
+    {t:'say',x:'Merdivenden aşağı iniyoruz.'},
+    {t:'task',x:'Benimle say: bir, iki, üç!',h:'bir ... i... ki ... üç',fx:'koro',a:'Aşağı indik!'},
+    {t:'sfx',s:'fren'},
+    {t:'say',x:'Metro geldi. Kapılar açılıyor.'},
+    {t:'sfx',s:'kapi'},
+    {t:'task',x:'Binmek için söyle: bin!',h:'bin',fx:'normal',a:'Bindik! Kapılar kapanıyor.'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Anons var. Sıradaki durak: Hayvanat Bahçesi!'},
+    {t:'task',x:'Anonsçu gibi söyle: durak!',h:'du... rak',fx:'robot',a:'Tam bir anonsçu gibi!'},
+    {t:'sfx',s:'fren'},
+    {t:'sfx',s:'kapi'},
+    {t:'say',x:'Kapı açıldı. Biri koşarak bindi. Ağaçtan ağaca atlayan biri...'},
+    {t:'task',x:'Maymun gibi söyle: u u a a!',h:'u ... u ... a ... a',fx:'sincap',a:'Maymun seninle dans ediyor!'},
+    {t:'task',x:'Onun adını söyle: maymun!',h:'may... mun',fx:'normal',a:'Maymun sana el salladı!'},
+    {t:'choice',x:'Maymun acıkmış. Ona ne verelim? Muz mu, fıstık mı?',r:'Muz mu, fıstık mı?',o:[
+      {w:['muz','muzu','mus','muzlar'],go:'muz'},
+      {w:['fıstık','fıstığı','fistik','fıtık','fıstıklar'],go:'fistik'}]}
+  ],
+  muz:[
+    {t:'task',x:'Söyle: muz!',h:'muz',fx:'sincap',a:'Hap! Maymun muzu bir lokmada yedi!'},
+    {t:'go',to:'durak2'}
+  ],
+  fistik:[
+    {t:'task',x:'Söyle: fıstık!',h:'fıs... tık',fx:'sincap',a:'Kıtır kıtır! Maymun fıstıkları çok sevdi!'},
+    {t:'go',to:'durak2'}
+  ],
+  durak2:[
+    {t:'sfx',s:'kapi'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Metro hızlandı. Karanlık tünellerden geçiyoruz.'},
+    {t:'task',x:'Metro gibi ses çıkar: vuuu!',h:'vuuu',fx:'tunel',a:'Vuuu... Tünel yankılandı!'},
+    {t:'say',x:'Sıradaki durak: Deniz Kenarı.'},
+    {t:'sfx',s:'fren'},
+    {t:'sfx',s:'kapi'},
+    {t:'say',x:'Biri yan yan yürüyerek bindi. Tık tık tık...'},
+    {t:'task',x:'Onun gibi söyle: tık tık!',h:'tık ... tık',fx:'sincap',a:'Kıskaçlarını şaklattı!'},
+    {t:'task',x:'Bu bir yengeç! Söyle: yengeç!',h:'yen... geç',fx:'normal',a:'Yengeç de yolculuğa katıldı.'},
+    {t:'task',x:'Yengeç nerede yaşar? Söyle: deniz!',h:'de... niz',fx:'normal',a:'Doğru! Denizde yaşar.'},
+    {t:'say',x:'Birden ışıklar söndü! Metro durdu. Ama korkma, Minik burada.'},
+    {t:'choice',x:'Işık yakmak için ne kullanalım? Fener mi, mum mu?',r:'Fener mi, mum mu?',o:[
+      {w:['fener','feneri','fene','pener','fenerle'],go:'fener'},
+      {w:['mum','mumu','mun','mumla'],go:'mum'}]}
+  ],
+  fener:[
+    {t:'task',x:'Söyle: fener!',h:'fe... ner',fx:'normal',a:'Klik! Fener yandı, her yer aydınlandı.'},
+    {t:'go',to:'sir'}
+  ],
+  mum:[
+    {t:'task',x:'Söyle: mum!',h:'mum',fx:'normal',a:'Mum yandı, her yer ışıl ışıl.'},
+    {t:'go',to:'sir'}
+  ],
+  sir:[
+    {t:'say',x:'Işıkta duvarda gizli bir kapı gördük! İşte sır bu!'},
+    {t:'task',x:'Kapıyı açmak için şifreyi söyle: açıl susam açıl!',h:'a... çıl ... su... sam ... a... çıl',fx:'tunel',a:'Gıcırrr... Gizli kapı açıldı!'},
+    {t:'say',x:'İçeride kocaman bir mağara var. Taşlar parıl parıl parlıyor.'},
+    {t:'task',x:'Gördüğün şeyi söyle: taş!',h:'taş',fx:'normal',a:'Bu taşlar elmas gibi parlıyor!'},
+    {t:'say',x:'Mağarada küçük biri yaşıyor. Toprağı kazıyor. Hışır hışır...'},
+    {t:'task',x:'Bu bir köstebek! Söyle: köstebek!',h:'kös... te... bek',fx:'sincap',a:'Köstebek gözlüklerini taktı, sana gülümsedi!'},
+    {t:'say',x:'Köstebek dedi ki: Merhaba! Metro tünellerini ben kazdım. Bu benim sırrım!'},
+    {t:'task',x:'Köstebeğe söyle: sen çok çalışkansın!',h:'sen ... çok ... ça... lış... kan... sın',fx:'dev',a:'Köstebek çok mutlu oldu!'},
+    {t:'task',x:'Mağarada seslen: kimse var mı?',h:'kim... se ... var ... mı',fx:'tunel',a:'Sadece yankı cevap verdi!'},
+    {t:'go',to:'eve'}
+  ],
+  eve:[
+    {t:'say',x:'Işıklar geri geldi. Metro tekrar çalışıyor!'},
+    {t:'sfx',s:'kapi'},
+    {t:'sfx',s:'hizli'},
+    {t:'task',x:'Herkes bağırsın: yaşasın!',h:'ya... şa... sın',fx:'koro',a:'Maymun, yengeç ve köstebek seninle sevindi!'},
+    {t:'say',x:'Son durak: Ev!'},
+    {t:'sfx',s:'fren'},
+    {t:'task',x:'Yolculara söyle: hoşça kalın!',h:'hoş... ça ... ka... lın',fx:'koro',a:'Herkes sana el salladı!'},
+    {t:'task',x:'Bana da söyle: teşekkürler Minik!',h:'te... şek... kür... ler ... mi... nik',fx:'robot',a:'Rica ederim! Sırrımızı kimseye söyleme, tamam mı?'}
+  ]
+  }
+});
+
+/* ---------------- 4. KIRMIZI ARABA ---------------- */
+STORIES.push({
+  id:'araba', icon:'🚗', title:'Kırmızı Araba', desc:'Kaybolan arabayı evine götür',
+  ending:'Kırmızı\'yı evine sen getirdin, harika bir sürücüsün!',
+  scenes:{
+  start:[
+    {t:'sfx',s:'motor'},
+    {t:'say',x:'Merhaba sürücü! Ben Kırmızı, minik bir araba.'},
+    {t:'say',x:'Şehirde gezerken yolumu kaybettim. Evimi bulmama yardım eder misin?'},
+    {t:'task',x:'Motoru çalıştır: brum brum!',h:'brum ... brum',fx:'dev',a:'Brum brum! Motor çalıştı!'},
+    {t:'task',x:'Söyle: araba!',h:'a... ra... ba',fx:'normal',a:'Evet, ben bir arabayım!'},
+    {t:'say',x:'Önümüzde bir trafik lambası var. Kırmızı yanıyor!'},
+    {t:'task',x:'Kırmızıda ne yaparız? Söyle: dur!',h:'dur',fx:'robot',a:'Doğru! Durduk.'},
+    {t:'sfx',s:'fren'},
+    {t:'task',x:'Lambanın rengini söyle: kırmızı!',h:'kır... mı... zı',fx:'normal',a:'Tıpkı benim gibi kırmızı!'},
+    {t:'say',x:'Lamba sarı oldu.'},
+    {t:'task',x:'Söyle: sarı!',h:'sa... rı',fx:'normal',a:'Sarıda hazırlanırız!'},
+    {t:'say',x:'Ve şimdi yeşil!'},
+    {t:'task',x:'Yeşilde ne yaparız? Söyle: geç!',h:'geç',fx:'robot',a:'Hadi gidelim!'},
+    {t:'sfx',s:'motor'},
+    {t:'say',x:'Bir kavşağa geldik. Polis amca trafiği yönetiyor.'},
+    {t:'task',x:'Polis amcaya selam ver: merhaba!',h:'mer... ha... ba',fx:'dev',a:'Polis amca dedi ki: Merhaba küçük araba!'},
+    {t:'task',x:'Polis amcaya sor: evim nerede?',h:'e... vim ... ne... re... de',fx:'normal',a:'Polis amca dedi ki: Evin büyük ağacın yanında!'},
+    {t:'choice',x:'Polis iki yol gösterdi. Parktan mı gidelim, çarşıdan mı?',r:'Park mı, çarşı mı?',o:[
+      {w:['park','parktan','parka','parkı','pak'],go:'park',x:'Parka gidiyoruz!'},
+      {w:['çarşı','çarşıdan','çarşıya','carsi','çaşı','çarşıyı'],go:'carsi',x:'Çarşıya gidiyoruz!'}]}
+  ],
+  park:[
+    {t:'say',x:'Parka geldik. Çocuklar sallanıyor. İleri, geri...'},
+    {t:'task',x:'Söyle: salıncak!',h:'sa... lın... cak',fx:'sincap',a:'İleri, geri, ileri, geri!'},
+    {t:'say',x:'Bir top yuvarlandı ve önümüzde durdu!'},
+    {t:'task',x:'Korna çal: bip bip!',h:'bip ... bip',fx:'sincap',a:'Çocuk topunu aldı, teşekkür etti!'},
+    {t:'sfx',s:'korna'},
+    {t:'say',x:'Ağacın üstünde bir baykuş var.'},
+    {t:'task',x:'Baykuş gibi söyle: uhu!',h:'u... hu',fx:'dev',a:'Baykuş dedi ki: Büyük ağaç ileride, sola dön!'},
+    {t:'go',to:'yol'}
+  ],
+  carsi:[
+    {t:'say',x:'Çarşı çok kalabalık! Herkes alışveriş yapıyor.'},
+    {t:'task',x:'Manavda kırmızı bir şey var. Söyle: domates!',h:'do... ma... tes',fx:'normal',a:'Kıpkırmızı domatesler, tıpkı benim gibi!'},
+    {t:'task',x:'Fırından bir şey alalım. Söyle: ekmek!',h:'ek... mek',fx:'normal',a:'Mis gibi sıcak ekmek!'},
+    {t:'say',x:'Fırıncı amca dedi ki: Büyük ağacı mı arıyorsun? İleriden sola dön!'},
+    {t:'task',x:'Fırıncıya söyle: teşekkür ederim!',h:'te... şek... kür ... e... de... rim',fx:'dev',a:'Fırıncı sana gülümsedi!'},
+    {t:'go',to:'yol'}
+  ],
+  yol:[
+    {t:'sfx',s:'motor'},
+    {t:'say',x:'Sola dönmemiz lazım. Hadi sinyal verelim.'},
+    {t:'task',x:'Sinyal gibi söyle: tik tak!',h:'tik ... tak',fx:'robot',a:'Tik tak, tik tak... Sola döndük!'},
+    {t:'say',x:'Bir kedi yolun karşısına geçiyor. Bekleyelim.'},
+    {t:'task',x:'Kediye söyle: geç kedi!',h:'geç ... ke... di',fx:'sincap',a:'Kedi miyav diyerek teşekkür etti.'},
+    {t:'say',x:'Aaa! Yolda kocaman bir su birikintisi var!'},
+    {t:'choice',x:'Ne yapalım? Yavaş mı gidelim, zıplayalım mı?',r:'Yavaş mı, zıpla mı?',o:[
+      {w:['yavaş','yavas','yavaşça','avaş','yavaşı'],go:'yavas'},
+      {w:['zıpla','zıplayalım','zıpa','zıpla','zıp','hop','zıplama'],go:'zipla'}]}
+  ],
+  yavas:[
+    {t:'task',x:'Söyle: yavaş yavaş!',h:'ya... vaş ... ya... vaş',fx:'dev',a:'Yavaşça geçtik, hiç ıslanmadık!'},
+    {t:'go',to:'ev'}
+  ],
+  zipla:[
+    {t:'task',x:'Söyle: hop!',h:'hop',fx:'sincap',a:'Hooop! Su birikintisinin üstünden uçtuk!'},
+    {t:'go',to:'ev'}
+  ],
+  ev:[
+    {t:'say',x:'Yokuş yukarı çıkıyoruz. Motor zorlanıyor.'},
+    {t:'task',x:'Hep birlikte söyleyelim: hadi Kırmızı!',h:'ha... di ... kır... mı... zı',fx:'koro',a:'Yokuşu çıktık!'},
+    {t:'sfx',s:'motor'},
+    {t:'say',x:'İşte kocaman ağaç! Ve yanında küçük bir ev!'},
+    {t:'task',x:'Arabaların evine ne denir? Söyle: garaj!',h:'ga... raj',fx:'normal',a:'Evet, burası benim evim!'},
+    {t:'task',x:'Kapıyı açmak için söyle: kapı açıl!',h:'ka... pı ... a... çıl',fx:'tunel',a:'Gıcırrr... Kapı açıldı!'},
+    {t:'say',x:'Annem Mavi Araba içeride bekliyormuş!'},
+    {t:'task',x:'Mavi Araba\'ya müjdeyi ver: Kırmızı geldi!',h:'kır... mı... zı ... gel... di',fx:'koro',a:'Mavi Araba korna çalarak sevindi!'},
+    {t:'sfx',s:'korna'},
+    {t:'task',x:'Bana da söyle: iyi geceler Kırmızı!',h:'i... yi ... ge... ce... ler',fx:'sincap',a:'İyi geceler sürücü! Beni eve getirdiğin için teşekkürler!'}
+  ]
+  }
+});
+
+/* ---------------- 5. AY'A YOLCULUK ---------------- */
+STORIES.push({
+  id:'roket', icon:'🚀', title:'Ay\'a Yolculuk', desc:'Roketle uzaya, uzaylı arkadaşa',
+  ending:'Ay\'a giden cesur astronot sensin!',
+  scenes:{
+  start:[
+    {t:'sfx',s:'bipbip'},
+    {t:'say',x:'Merhaba astronot! Ben Yıldız, bir uzay roketi. Bugün Ay\'a gidiyoruz!'},
+    {t:'task',x:'Kaskını tak ve söyle: hazırım!',h:'ha... zı... rım',fx:'robot',a:'Kask takıldı. Telsiz çalışıyor!'},
+    {t:'say',x:'Kontrol merkezi seni duyuyor. Geri sayım başlıyor!'},
+    {t:'task',x:'Benimle say: beş, dört, üç, iki, bir!',h:'beş ... dört ... üç ... i... ki ... bir',fx:'koro',a:'Ve...'},
+    {t:'task',x:'Şimdi bağır: ateş!',h:'a... teş',fx:'dev',a:'Kalkış!'},
+    {t:'sfx',s:'roket'},
+    {t:'say',x:'Gökyüzüne yükseliyoruz! Beyaz, yumuşak şeylerin içinden geçiyoruz.'},
+    {t:'task',x:'Bunlar ne? Söyle: bulut!',h:'bu... lut',fx:'normal',a:'Pamuk gibi bulutlar!'},
+    {t:'say',x:'Şimdi uzaydayız. Uzayda her şey havada uçuyor!'},
+    {t:'task',x:'Uçarken söyle: uçuyorum!',h:'u... çu... yo... rum',fx:'sincap',a:'Hafif hafif uçuyorsun!'},
+    {t:'say',x:'Etrafta parıl parıl bir sürü küçük ışık var.'},
+    {t:'task',x:'Bunlar ne? Söyle: yıldız!',h:'yıl... dız',fx:'tunel',a:'Yıldızlar sana göz kırptı!'},
+    {t:'sfx',s:'bipbip'},
+    {t:'task',x:'Bilgisayar gibi söyle: bip bop!',h:'bip ... bop',fx:'robot',a:'Bilgisayar dedi ki: Dikkat! Önümüzde bir göktaşı var!'},
+    {t:'choice',x:'Göktaşından nasıl kaçalım? Sağa mı dönelim, sola mı?',r:'Sağ mı, sol mu?',o:[
+      {w:['sağ','sağa','saa','sağı','sağdan'],go:'sag'},
+      {w:['sol','sola','solu','soldan','sool'],go:'sol'}]}
+  ],
+  sag:[
+    {t:'task',x:'Direksiyonu çevir ve söyle: sağa!',h:'sa... ğa',fx:'robot',a:'Vuuuş! Göktaşı yanımızdan geçti!'},
+    {t:'go',to:'uzay'}
+  ],
+  sol:[
+    {t:'task',x:'Direksiyonu çevir ve söyle: sola!',h:'so... la',fx:'robot',a:'Vuuuş! Göktaşından kaçtık!'},
+    {t:'go',to:'uzay'}
+  ],
+  uzay:[
+    {t:'say',x:'Pencereden kocaman, halkalı bir şey görünüyor.'},
+    {t:'task',x:'Bu bir gezegen! Söyle: gezegen!',h:'ge... ze... gen',fx:'tunel',a:'Etrafında halkalar dönüyor!'},
+    {t:'say',x:'Ve işte... Önümüzde kocaman, yuvarlak, beyaz bir şey parlıyor.'},
+    {t:'task',x:'Bu ne? Söyle: Ay!',h:'ay',fx:'dev',a:'Evet, Ay! Geldik!'},
+    {t:'sfx',s:'roket'},
+    {t:'say',x:'Ay\'a yavaşça indik.'},
+    {t:'task',x:'Kapıyı aç ve söyle: Ay\'dayım!',h:'ay... da... yım',fx:'tunel',a:'Ay\'da ilk adımını attın!'},
+    {t:'say',x:'Ay\'da zıplamak çok kolay. Her adımda havaya uçuyorsun!'},
+    {t:'task',x:'Zıplarken söyle: hop hop!',h:'hop ... hop',fx:'sincap',a:'Hooop! Ne kadar yükseğe zıpladın!'},
+    {t:'say',x:'Bir çukurun arkasından yeşil, küçük biri çıktı. Üç gözü var ve gülümsüyor!'},
+    {t:'task',x:'Ona selam ver: merhaba uzaylı!',h:'mer... ha... ba ... uz... ay... lı',fx:'sincap',a:'Uzaylı dedi ki: Bip bip! Benim adım Zıpzıp!'},
+    {t:'task',x:'Yeni arkadaşının adını söyle: Zıpzıp!',h:'zıp... zıp',fx:'sincap',a:'Zıpzıp çok sevindi!'},
+    {t:'choice',x:'Zıpzıp\'a ne hediye verelim? Balon mu, tren mi?',r:'Balon mu, tren mi?',o:[
+      {w:['balon','balonu','balo','alon','balonlar'],go:'balon'},
+      {w:['tren','treni','teren','tiren','trene'],go:'tren'}]}
+  ],
+  balon:[
+    {t:'task',x:'Söyle: balon!',h:'ba... lon',fx:'sincap',a:'Zıpzıp balonla uçmaya başladı!'},
+    {t:'go',to:'donus'}
+  ],
+  tren:[
+    {t:'task',x:'Söyle: tren!',h:'tren',fx:'dev',a:'Zıpzıp çuf çuf diye treniyle oynamaya başladı!'},
+    {t:'go',to:'donus'}
+  ],
+  donus:[
+    {t:'say',x:'Zıpzıp da sana bir hediye verdi: parlayan bir Ay taşı!'},
+    {t:'task',x:'Teşekkür et: teşekkürler Zıpzıp!',h:'te... şek... kür... ler ... zıp... zıp',fx:'koro',a:'Zıpzıp mutlulukla zıpladı!'},
+    {t:'say',x:'Eve dönme zamanı.'},
+    {t:'task',x:'Zıpzıp\'a söyle: güle güle!',h:'gü... le ... gü... le',fx:'sincap',a:'Zıpzıp üç eliyle el salladı!'},
+    {t:'sfx',s:'roket'},
+    {t:'say',x:'Uzaktan mavi, güzel bir gezegen göründü. Bizim evimiz!'},
+    {t:'task',x:'Onun adını söyle: Dünya!',h:'dün... ya',fx:'tunel',a:'Evimiz Dünya, ne kadar güzel!'},
+    {t:'say',x:'Yavaşça inmek için paraşütü açmamız lazım!'},
+    {t:'task',x:'Bağır: paraşüt aç!',h:'pa... ra... şüt ... aç',fx:'koro',a:'Paraşüt açıldı! Yavaşça iniyoruz.'},
+    {t:'sfx',s:'bipbip'},
+    {t:'say',x:'Kontrol merkezi soruyor: Astronot, beni duyuyor musun?'},
+    {t:'task',x:'Telsizle cevap ver: duyuyorum, indik!',h:'du... yu... yo... rum ... in... dik',fx:'robot',a:'Kontrol merkezinde herkes alkışlıyor!'},
+    {t:'task',x:'Bana da söyle: teşekkürler Yıldız!',h:'te... şek... kür... ler ... yıl... dız',fx:'dev',a:'Rica ederim astronot! Yeni macerada görüşürüz!'}
+  ]
+  }
+});
 
 /* =========================================================
    ARAYÜZ
    ========================================================= */
+let PLAYED={};
+try{PLAYED=JSON.parse(localStorage.getItem('sy_played')||'{}');}catch(e){}
+function markPlayed(id){PLAYED[id]=(PLAYED[id]||0)+1;try{localStorage.setItem('sy_played',JSON.stringify(PLAYED));}catch(e){}}
 function renderList(){
   let h='';
-  STORIES.forEach((s,i)=>{h+='<div class="story"><div class="ic">'+s.icon+'</div><div class="tx"><b>'+s.title+'</b><span>'+s.desc+'</span></div><button data-i="'+i+'">Başla</button></div>';});
-  COMING.forEach(s=>{h+='<div class="story off"><div class="ic">'+s.icon+'</div><div class="tx"><b>'+s.title+'</b><span>Yakında</span></div></div>';});
+  STORIES.forEach((s,i)=>{const n=PLAYED[s.id]||0;h+='<div class="story"><div class="ic">'+s.icon+'</div><div class="tx"><b>'+s.title+'</b><span>'+s.desc+(n?' • '+n+' kez oynandı':'')+'</span></div><button data-i="'+i+'">Başla</button></div>';});
   $('storyList').innerHTML=h;
   $('storyList').querySelectorAll('button[data-i]').forEach(b=>b.onclick=()=>play(STORIES[+b.dataset.i]));
 }
@@ -655,6 +1044,7 @@ async function play(story){
     $('summary').style.display='block';
     $('summary').innerHTML='<b>'+story.icon+' '+story.title+'</b> '+(ok?'tamamlandı':'yarıda bırakıldı')+
       '<br>Süre: '+min+' dk • Konuştuğu görev: '+said+' / '+tasksTotal;
+    if(ok){markPlayed(story.id);renderList();}
     window.scrollTo(0,0);
   }
 }
@@ -673,7 +1063,7 @@ $('secretL').onclick=()=>{
 document.addEventListener('click',()=>{if(ctx&&ctx.state!=='running')ctx.resume();},true);
 $('btnMic').onclick=()=>{log('Mikrofon isteniyor...');startMic();};
 $('sens').oninput=e=>{sens=+e.target.value;$('sensVal').textContent=sens;updateThreshold();};
-$('btnRandom').onclick=()=>play(pick(STORIES));
+$('btnRandom').onclick=()=>{const min=Math.min(...STORIES.map(s=>PLAYED[s.id]||0));play(pick(STORIES.filter(s=>(PLAYED[s.id]||0)===min)));};
 
 function showSupport(){
   const a=[];
@@ -693,11 +1083,13 @@ $('voiceSel').onchange=e=>{trVoice=trVoices[+e.target.value]||trVoice;VS.name=tr
 $('rate').oninput=e=>{VS.rate=+e.target.value;saveVS();renderSliders();};
 $('pitch').oninput=e=>{VS.pitch=+e.target.value;saveVS();renderSliders();};
 $('btnVoice').onclick=()=>say('Merhaba küçük makinist! Ben Düdük, çuf çuf tren. Bugün hayvan arkadaşlarımızı alıp pikniğe gideceğiz.');
+document.getElementById('sfxBtns').innerHTML=Object.keys(SFX).map(k=>'<button class="ghost" style="margin:3px;padding:8px 10px;font-size:14px" data-s="'+k+'">'+k+'</button>').join('');
+document.querySelectorAll('#sfxBtns button').forEach(b=>b.onclick=()=>sfx(b.dataset.s));
 renderSliders();
 renderVoices();
 renderList();
 showSupport();
-log('Sayfa hazır (Faz 2.1)');
+log('Sayfa hazır (Faz 3.0)');
 </script>
 </body>
 </html>
