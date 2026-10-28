@@ -746,7 +746,52 @@ const SFX={
     master.gain.setValueAtTime(1,end-0.7);
     master.gain.linearRampToValueAtTime(0.0001,end+0.4);
     return (end-c.currentTime)*1000+700;
-  }
+  },
+  /* İtfaiye sireni "dü-dü" (iki tonlu) */
+  siren(){const c=getCtx(),t=c.currentTime+0.02,D=3;const o=c.createOscillator();o.type='sawtooth';
+    for(let k=0;k*0.45<D;k++)o.frequency.setValueAtTime(k%2?587:440,t+k*0.45);
+    const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2200;
+    const pk=c.createBiquadFilter();pk.type='peaking';pk.frequency.value=1200;pk.gain.value=5;
+    const g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.21,t+0.05);g.gain.setValueAtTime(0.21,t+D-0.3);g.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    o.connect(lp);lp.connect(pk);pk.connect(g);g.connect(c.destination);o.start(t);o.stop(t+D);
+    return D*1000+100;},
+  /* Su fışkırması "fışşş" + damlacıklar */
+  su(){const c=getCtx(),t=c.currentTime+0.02,D=1.6,nb=noiseBuffer(2);
+    const s=c.createBufferSource();s.buffer=nb;const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=2200;f.Q.value=0.6;
+    const g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.5,t+0.08);g.gain.setValueAtTime(0.5,t+D-0.6);g.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    const am=c.createGain();am.gain.value=0.75;const l=c.createOscillator();l.frequency.value=13;const lg=c.createGain();lg.gain.value=0.25;l.connect(lg);lg.connect(am.gain);
+    s.connect(f);f.connect(am);am.connect(g);g.connect(c.destination);s.start(t);s.stop(t+D);l.start(t);l.stop(t+D);
+    for(let i=0;i<14;i++){const tt=t+0.2+Math.random()*(D-0.3),o=c.createOscillator(),f0=900+Math.random()*1800;
+      o.frequency.setValueAtTime(f0,tt);o.frequency.exponentialRampToValueAtTime(f0*1.6,tt+0.04);
+      const og=c.createGain();og.gain.setValueAtTime(0.0001,tt);og.gain.exponentialRampToValueAtTime(0.06,tt+0.003);og.gain.exponentialRampToValueAtTime(0.0001,tt+0.05);
+      o.connect(og);og.connect(c.destination);o.start(tt);o.stop(tt+0.06);}
+    return D*1000+100;},
+  /* Vapur düdüğü: kalın, uzun "düüüt" (telefon hoparlörü için 175 Hz ve üstü) */
+  vapur(){const c=getCtx(),t=c.currentTime+0.02,D=2.2;
+    const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1400;lp.Q.value=2;
+    const g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.2,t+0.18);g.gain.setValueAtTime(0.2,t+D-0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    lp.connect(g);g.connect(c.destination);
+    [[175,'sawtooth',1],[220,'sawtooth',0.7],[350,'square',0.25]].forEach(([f,ty,a])=>{const o=c.createOscillator();o.type=ty;
+      o.frequency.setValueAtTime(f*0.97,t);o.frequency.linearRampToValueAtTime(f,t+0.15);
+      const v=c.createOscillator();v.frequency.value=5;const vg=c.createGain();vg.gain.value=f*0.004;v.connect(vg);vg.connect(o.frequency);
+      const og=c.createGain();og.gain.value=a;o.connect(og);og.connect(lp);o.start(t);v.start(t);o.stop(t+D);v.stop(t+D);});
+    return D*1000+100;},
+  /* Uçak kalkışı: yükselen jet uğultusu + türbin ıslığı */
+  ucak(){const c=getCtx(),t=c.currentTime+0.02,D=3.5,nb=noiseBuffer(4);
+    const s=c.createBufferSource();s.buffer=nb;const f=c.createBiquadFilter();f.type='bandpass';f.Q.value=0.6;
+    f.frequency.setValueAtTime(300,t);f.frequency.exponentialRampToValueAtTime(1800,t+D*0.7);f.frequency.exponentialRampToValueAtTime(900,t+D);
+    const g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.9,t+D*0.6);g.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    s.connect(f);f.connect(g);g.connect(c.destination);s.start(t);s.stop(t+D);
+    const o=c.createOscillator();o.frequency.setValueAtTime(900,t);o.frequency.exponentialRampToValueAtTime(2600,t+D*0.7);
+    const og=c.createGain();og.gain.setValueAtTime(0.0001,t);og.gain.exponentialRampToValueAtTime(0.03,t+D*0.5);og.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    o.connect(og);og.connect(c.destination);o.start(t);o.stop(t+D);
+    return D*1000+100;},
+  /* Anons zili: ding-dong-ding (havalimanı / istasyon) */
+  anons(){const c=getCtx(),t=c.currentTime+0.02;
+    [[523,0],[659,0.3],[784,0.6]].forEach(([fr,dt])=>{[1,2.01].forEach((m,j)=>{const o=c.createOscillator();o.frequency.value=fr*m;const g=c.createGain();
+      g.gain.setValueAtTime(0.0001,t+dt);g.gain.exponentialRampToValueAtTime(j?0.09:0.4,t+dt+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+dt+0.9);
+      o.connect(g);g.connect(c.destination);o.start(t+dt);o.stop(t+dt+0.95);});});
+    return 1600;}
 };
 /* ---------- Gerçek ses dosyaları (isteğe bağlı) ----------
    GitHub'a "ses-ANAHTAR.mp3" (ya da .wav) adlı bir dosya yüklenirse
@@ -908,7 +953,7 @@ async function runStory(story){
   checkStop();
   await sfx('ding');
   await say('Bugün tam '+said+' kere konuştun. '+story.ending);
-  await sfx('duduk');
+  if(story.endSfx!==null)await sfx(story.endSfx||'duduk');
 }
 
 /* =========================================================
@@ -1362,6 +1407,378 @@ STORIES.push({
 /* =========================================================
    ARAYÜZ
    ========================================================= */
+/* ---------------- 6. İTFAİYE KAHRAMANI ---------------- */
+STORIES.push({
+  id:'itfaiye', icon:'🚒', title:'İtfaiye Kahramanı', desc:'Kediyi kurtar, dumanı söndür', endSfx:'siren',
+  ending:'Bugün gerçek bir itfaiye kahramanıydın!',
+  scenes:{
+  start:[
+    {t:'say',x:'Merhaba itfaiyeci! Ben Fıskiye, kırmızı bir itfaiye aracı. İstasyonda bekliyoruz.'},
+    {t:'task',x:'Söyle: itfaiye!',h:'it... fa... i... ye',fx:'normal',a:'Evet, biz itfaiyeyiz! Hep yardıma koşarız.'},
+    {t:'sfx',s:'anons'},
+    {t:'say',x:'Aaa, bir zil çaldı! Birinin yardıma ihtiyacı var.'},
+    {t:'task',x:'Söyle: alarm!',h:'a... larm',fx:'robot',a:'Alarm! Hemen yola çıkıyoruz!'},
+    {t:'task',x:'Sireni çalıştır: dü dü!',h:'dü ... dü',fx:'sincap',a:'Dü dü dü! Yollar açılıyor!'},
+    {t:'sfx',s:'siren'},
+    {t:'say',x:'Hızla gidiyoruz. Önümüzde arabalar var.'},
+    {t:'task',x:'Arabalara söyle: yol ver!',h:'yol ... ver',fx:'dev',a:'Bütün arabalar kenara çekildi!'},
+    {t:'task',x:'Kırmızı ışık yanıyor ama itfaiye geçebilir. Söyle: acil!',h:'a... cil',fx:'dev',a:'Acil durum! Geçiyoruz!'},
+    {t:'sfx',s:'motor'},
+    {t:'say',x:'Parka geldik. Yüksek bir ağacın tepesinde minik bir kedi var. Miyav, miyav...'},
+    {t:'task',x:'Kediye seslen: korkma!',h:'kork... ma',fx:'normal',a:'Kedi biraz sakinleşti.'},
+    {t:'task',x:'Kediye sor: adın ne?',h:'a... dın ... ne',fx:'normal',a:'Kedi dedi ki: Miyav! Benim adım Pamuk!'},
+    {t:'say',x:'Kediyi kurtarmak için uzun bir şey lazım.'},
+    {t:'task',x:'Söyle: merdiven!',h:'mer... di... ven',fx:'normal',a:'Merdiven uzadı, uzadı... tam kediye kadar!'},
+    {t:'task',x:'Tırmanırken say: bir, iki, üç, dört!',h:'bir ... i... ki ... üç ... dört',fx:'koro',a:'Kediye ulaştık!'},
+    {t:'task',x:'Kediyi kucakla ve söyle: seni kurtardım!',h:'se... ni ... kur... tar... dım',fx:'sincap',a:'Kedi seni yaladı. Miyav, teşekkürler!'},
+    {t:'say',x:'Kedinin sahibi küçük bir kız. Koşarak geldi.'},
+    {t:'task',x:'Kıza söyle: kedin burada!',h:'ke... din ... bu... ra... da',fx:'koro',a:'Kız kedisine sarıldı ve sana teşekkür etti!'},
+    {t:'sfx',s:'anons'},
+    {t:'choice',x:'Bir alarm daha! Fırından mı duman çıkıyor, çiftlikten mi?',r:'Fırın mı, çiftlik mi?',o:[
+      {w:['fırın','fırından','fırına','firin','fırını'],go:'firin',x:'Fırına gidiyoruz!'},
+      {w:['çiftlik','çiftlikten','çiftliğe','ciftlik','çitlik','çiflik'],go:'ciftlik',x:'Çiftliğe gidiyoruz!'}]}
+  ],
+  firin:[
+    {t:'sfx',s:'siren'},
+    {t:'say',x:'Fırına geldik. Bacadan kara duman çıkıyor! Fırıncı amca ekmekleri unutmuş.'},
+    {t:'task',x:'Hortumu aç ve söyle: su!',h:'su',fx:'normal',a:'İşte geliyor!'},
+    {t:'sfx',s:'su'},
+    {t:'task',x:'Söyle: duman gitti!',h:'du... man ... git... ti',fx:'koro',a:'Duman gitti, her yer temiz!'},
+    {t:'task',x:'Fırıncı amcaya sor: iyi misin?',h:'i... yi ... mi... sin',fx:'dev',a:'Fırıncı amca: İyiyim, sağ ol! dedi.'},
+    {t:'say',x:'Fırıncı amca bize sıcak, susamlı bir şey verdi.'},
+    {t:'task',x:'Söyle: simit!',h:'si... mit',fx:'sincap',a:'Mmm, çıtır çıtır simit!'},
+    {t:'go',to:'donus'}
+  ],
+  ciftlik:[
+    {t:'sfx',s:'siren'},
+    {t:'say',x:'Çiftliğe geldik. Samanlıktan biraz duman çıkıyor. Hayvanlar korkmuş!'},
+    {t:'task',x:'Söyle: saman!',h:'sa... man',fx:'normal',a:'Samanlık burada!'},
+    {t:'task',x:'Hortumu aç ve söyle: fış fış!',h:'fış ... fış',fx:'sincap',a:'Su fışkırdı!'},
+    {t:'sfx',s:'su'},
+    {t:'say',x:'Duman söndü! Çatıda bir kuş bağırıyor.'},
+    {t:'task',x:'Bu bir horoz! Söyle: horoz!',h:'ho... roz',fx:'normal',a:'Horoz kanatlarını çırptı!'},
+    {t:'task',x:'Horoz gibi öt: ü ürü üüü!',h:'ü ... ü... rü ... üüü',fx:'sincap',a:'Horoz da seninle öttü!'},
+    {t:'go',to:'donus'}
+  ],
+  donus:[
+    {t:'say',x:'Görev tamam! İstasyona dönüyoruz.'},
+    {t:'task',x:'Sireni kapat. Şimdi fısılda: şşşt!',h:'şşşt',fx:'normal',a:'Şşşt... Ne güzel bir sessizlik.'},
+    {t:'task',x:'Telsizle haber ver: görev tamam!',h:'gö... rev ... ta... mam',fx:'robot',a:'Telsiz: Aferin ekip! dedi.'},
+    {t:'sfx',s:'motor'},
+    {t:'say',x:'Ama Fıskiye çok kirlendi. Her yeri çamur!'},
+    {t:'choice',x:'Fıskiye\'yi neyle yıkayalım? Köpükle mi, suyla mı?',r:'Köpük mü, su mu?',o:[
+      {w:['köpük','köpükle','kopuk','köbük','köpüğü'],go:'kopuk'},
+      {w:['su','suyla','suyu','sula','sular'],go:'suyla'}]}
+  ],
+  kopuk:[
+    {t:'task',x:'Söyle: köpük köpük!',h:'kö... pük ... kö... pük',fx:'sincap',a:'Her yer köpük oldu, Fıskiye gıdıklandı!'},
+    {t:'go',to:'son'}
+  ],
+  suyla:[
+    {t:'task',x:'Söyle: şırıl şırıl!',h:'şı... rıl ... şı... rıl',fx:'tunel',a:'Fıskiye pırıl pırıl oldu!'},
+    {t:'sfx',s:'su'},
+    {t:'go',to:'son'}
+  ],
+  son:[
+    {t:'task',x:'Fıskiye\'ye söyle: tertemiz oldun!',h:'ter... te... miz ... ol... dun',fx:'dev',a:'Teşekkürler! Kıpkırmızı parlıyorum!'},
+    {t:'say',x:'Bugün iki kez yardım ettin. Sana bir madalya veriyoruz!'},
+    {t:'task',x:'Söyle: ben bir kahramanım!',h:'ben ... bir ... kah... ra... ma... nım',fx:'koro',a:'Herkes alkışlıyor! Yaşasın itfaiyeci!'},
+    {t:'task',x:'Bana da söyle: görüşürüz Fıskiye!',h:'gö... rü... şü... rüz ... fıs... ki... ye',fx:'sincap',a:'Görüşürüz kahraman! Alarm çalarsa seni çağırırım!'}
+  ]
+  }
+});
+
+/* ---------------- 7. VAPUR DALGA ---------------- */
+STORIES.push({
+  id:'vapur', icon:'⛴️', title:'Vapur Dalga', desc:'Martılar, yunus ve deniz hazinesi', endSfx:'vapur',
+  ending:'Denizlerin en cesur kaptanı sensin!',
+  scenes:{
+  start:[
+    {t:'sfx',s:'vapur'},
+    {t:'say',x:'Merhaba kaptan! Ben Dalga, beyaz bir vapur. Bugün denizde yolculuk yapacağız.'},
+    {t:'task',x:'Söyle: vapur!',h:'va... pur',fx:'dev',a:'Evet, ben bir vapurum! Düüüt!'},
+    {t:'task',x:'Can yeleğini giy ve söyle: giydim!',h:'giy... dim',fx:'normal',a:'Güvendeyiz!'},
+    {t:'say',x:'Vapuru iskeleye bağlayan kalın bir ip var.'},
+    {t:'task',x:'Bu ipin adı halat. Söyle: halat!',h:'ha... lat',fx:'normal',a:'Halat çözüldü!'},
+    {t:'task',x:'Kaptan gibi bağır: yola çıkıyoruz!',h:'yo... la ... çı... kı... yo... ruz',fx:'koro',a:'Bütün yolcular el salladı!'},
+    {t:'sfx',s:'vapur'},
+    {t:'say',x:'Denizdeyiz. Dalgalar vapuru sallıyor. Hop, hop!'},
+    {t:'task',x:'Dalga gibi söyle: şuuuş!',h:'şuuuş',fx:'tunel',a:'Dalgalar sana cevap verdi!'},
+    {t:'say',x:'Tepemizde beyaz kuşlar uçuyor. Bir şey istiyorlar!'},
+    {t:'task',x:'Bu kuşların adı: martı!',h:'mar... tı',fx:'sincap',a:'Martılar bağırdı: Ak ak ak!'},
+    {t:'task',x:'Martı gibi bağır: ak ak!',h:'ak ... ak',fx:'sincap',a:'Bir martı yanına kondu!'},
+    {t:'choice',x:'Martıya ne verelim? Simit mi, ekmek mi?',r:'Simit mi, ekmek mi?',o:[
+      {w:['simit','simidi','simit','sumit','simi'],go:'simit'},
+      {w:['ekmek','ekmeği','emek','ekme','ekmeki'],go:'ekmek'}]}
+  ],
+  simit:[
+    {t:'task',x:'Söyle: simit!',h:'si... mit',fx:'sincap',a:'Hap! Martı simidi havada yakaladı!'},
+    {t:'go',to:'deniz'}
+  ],
+  ekmek:[
+    {t:'task',x:'Söyle: ekmek!',h:'ek... mek',fx:'sincap',a:'Martı ekmeği kaptı ve teşekkür etti!'},
+    {t:'go',to:'deniz'}
+  ],
+  deniz:[
+    {t:'say',x:'Bak! Suyun içinden biri zıpladı. Gri, kaygan ve çok neşeli...'},
+    {t:'task',x:'Bu bir yunus! Söyle: yunus!',h:'yu... nus',fx:'sincap',a:'Yunus havaya zıpladı! Şlap!'},
+    {t:'sfx',s:'su'},
+    {t:'task',x:'Yunus gibi ses çıkar: iii iii!',h:'iii ... iii',fx:'sincap',a:'Yunus seni çok sevdi!'},
+    {t:'say',x:'Yunusun arkadaşları da geldi. Bir, iki, üç yunus!'},
+    {t:'task',x:'Yunuslara söyle: hoş geldiniz!',h:'hoş ... gel... di... niz',fx:'koro',a:'Üç yunus birden zıpladı!'},
+    {t:'say',x:'Yunus bir sır söylüyor: Denizin dibinde bir hazine var!'},
+    {t:'choice',x:'Aşağı nasıl inelim? Dalgıç mı olalım, denizaltıya mı binelim?',r:'Dalgıç mı, denizaltı mı?',o:[
+      {w:['dalgıç','dalgıc','dalgic','dalgı','dalgıç olalım'],go:'dalgic'},
+      {w:['denizaltı','denizaltıya','denizaltı','denizalti','altı'],go:'denizalti'}]}
+  ],
+  dalgic:[
+    {t:'say',x:'Dalgıç kıyafetini giydin. Suya atladın. Şap!'},
+    {t:'task',x:'Su altında söyle: blub blub!',h:'blub ... blub',fx:'tunel',a:'Baloncuklar yukarı çıktı!'},
+    {t:'go',to:'hazine'}
+  ],
+  denizalti:[
+    {t:'say',x:'Sarı bir denizaltıya bindik. Aşağı iniyoruz.'},
+    {t:'task',x:'Söyle: dalış!',h:'da... lış',fx:'robot',a:'Denizaltı dalıyor! Blub blub!'},
+    {t:'go',to:'hazine'}
+  ],
+  hazine:[
+    {t:'say',x:'Denizin dibindeyiz. Renkli balıklar etrafımızda yüzüyor.'},
+    {t:'task',x:'Söyle: balık!',h:'ba... lık',fx:'sincap',a:'Balıklar sana göz kırptı!'},
+    {t:'task',x:'Önünden geçeni söyle: kırmızı balık!',h:'kır... mı... zı ... ba... lık',fx:'sincap',a:'Kırmızı balık kuyruğunu salladı!'},
+    {t:'say',x:'Kumun içinde bir sandık var!'},
+    {t:'task',x:'Sandığı açmak için söyle: açıl sandık!',h:'a... çıl ... san... dık',fx:'tunel',a:'Gıcırrr... Sandık açıldı! İçi parıl parıl deniz kabuklarıyla dolu!'},
+    {t:'task',x:'Söyle: deniz kabuğu!',h:'de... niz ... ka... bu... ğu',fx:'normal',a:'Kulağına tut, denizin sesini duyacaksın!'},
+    {t:'sfx',s:'su'},
+    {t:'say',x:'Yukarı çıkıp vapura döndük.'},
+    {t:'go',to:'eve'}
+  ],
+  eve:[
+    {t:'sfx',s:'vapur'},
+    {t:'say',x:'Akşam oldu. Güneş batıyor, gökyüzü turuncu.'},
+    {t:'task',x:'Söyle: güneş batıyor!',h:'gü... neş ... ba... tı... yor',fx:'normal',a:'Ne güzel bir manzara!'},
+    {t:'task',x:'Geldiğimizi haber ver. Düdüğü çal: düt düüüt!',h:'düt ... düüüt',fx:'dev',a:'Herkes vapurun geldiğini duydu!'},
+    {t:'say',x:'İskeleye yaklaşıyoruz. Halatı bağlamamız lazım.'},
+    {t:'task',x:'Söyle: bağla!',h:'bağ... la',fx:'dev',a:'Halat bağlandı, vapur durdu.'},
+    {t:'task',x:'Yolculara söyle: iyi akşamlar!',h:'i... yi ... ak... şam... lar',fx:'koro',a:'Herkes sana el salladı!'},
+    {t:'task',x:'Bana da söyle: teşekkürler Dalga!',h:'te... şek... kür... ler ... dal... ga',fx:'dev',a:'Rica ederim kaptan! Yarın yine denize açılalım!'}
+  ]
+  }
+});
+
+/* ---------------- 8. UÇAK KANAT ---------------- */
+STORIES.push({
+  id:'ucak', icon:'✈️', title:'Uçak Kanat', desc:'Pilot ol, fırtınadan geç', endSfx:'anons',
+  ending:'Gökyüzünün en iyi pilotu sensin!',
+  scenes:{
+  start:[
+    {t:'sfx',s:'anons'},
+    {t:'say',x:'Merhaba pilot! Ben Kanat, kocaman bir yolcu uçağı. Bugün tatile uçuyoruz!'},
+    {t:'task',x:'Söyle: uçak!',h:'u... çak',fx:'dev',a:'Evet, ben bir uçağım!'},
+    {t:'task',x:'Pilot şapkanı tak ve söyle: ben pilotum!',h:'ben ... pi... lo... tum',fx:'dev',a:'Şapka sana çok yakıştı!'},
+    {t:'say',x:'Önce eşyaları yükleyelim.'},
+    {t:'task',x:'Söyle: bavul!',h:'ba... vul',fx:'normal',a:'Bavullar yüklendi.'},
+    {t:'say',x:'Kontrol kulesi bizi çağırıyor.'},
+    {t:'task',x:'Telsizle söyle: alo alo!',h:'a... lo ... a... lo',fx:'robot',a:'Kule: Seni duyuyorum Kanat! Pist hazır.'},
+    {t:'sfx',s:'anons'},
+    {t:'task',x:'Anons yap: herkes binsin!',h:'her... kes ... bin... sin',fx:'tunel',a:'Yolcular koltuklarına oturdu.'},
+    {t:'task',x:'Herkes emniyet şeridini taksın. Söyle: kemer!',h:'ke... mer',fx:'normal',a:'Klik! Kemerler takıldı.'},
+    {t:'say',x:'Piste çıktık. Motorlar ısınıyor.'},
+    {t:'task',x:'Motor gibi söyle: vıııın!',h:'vıııın',fx:'dev',a:'Motorlar hazır!'},
+    {t:'task',x:'Şimdi bağır: kalkış!',h:'kal... kış',fx:'koro',a:'Ve havalanıyoruz!'},
+    {t:'sfx',s:'ucak'},
+    {t:'task',x:'Pencereden bak ve söyle: ne kadar yüksek!',h:'ne ... ka... dar ... yük... sek',fx:'sincap',a:'Evet, kuşlardan bile yüksekteyiz!'},
+    {t:'say',x:'Kabin görevlileri yolculara ikram yapıyor.'},
+    {t:'task',x:'Yolculara sor: su ister misiniz?',h:'su ... is... ter ... mi... si... niz',fx:'normal',a:'Yolcular: Evet, teşekkürler! dedi.'},
+    {t:'choice',x:'Nereye uçalım? Denize mi, karlı dağlara mı?',r:'Deniz mi, dağ mı?',o:[
+      {w:['deniz','denize','denizi','deni','eniz'],go:'deniz'},
+      {w:['dağ','dağlara','dağa','dağı','dağlar','karlı'],go:'dag'}]}
+  ],
+  deniz:[
+    {t:'say',x:'Masmavi denizin üstündeyiz. Aşağıda küçük bir kara parçası var.'},
+    {t:'task',x:'Bu bir ada! Söyle: ada!',h:'a... da',fx:'normal',a:'Yemyeşil ağaçlı küçük bir ada!'},
+    {t:'task',x:'Adada uzun ağaçlar var. Söyle: palmiye!',h:'pal... mi... ye',fx:'sincap',a:'Palmiyeler rüzgarda sallanıyor!'},
+    {t:'go',to:'firtina'}
+  ],
+  dag:[
+    {t:'say',x:'Kar yağmış dağların üstündeyiz. Her yer bembeyaz.'},
+    {t:'task',x:'Söyle: beyaz!',h:'be... yaz',fx:'normal',a:'Bembeyaz kar!'},
+    {t:'task',x:'Dağdan biri kayıyor. Söyle: kayak!',h:'ka... yak',fx:'sincap',a:'Vııj! Kayakçı sana el salladı!'},
+    {t:'go',to:'firtina'}
+  ],
+  firtina:[
+    {t:'say',x:'Aaa, önümüzde kara bulutlar var. Gök gürlüyor!'},
+    {t:'task',x:'Gök gürültüsü gibi söyle: gürüm!',h:'gü... rüm',fx:'dev',a:'Ne kocaman bir gürültü!'},
+    {t:'task',x:'Bir ışık çaktı! Söyle: şimşek!',h:'şim... şek',fx:'tunel',a:'Vay, ne parlak!'},
+    {t:'say',x:'Yağmur damlaları cama vuruyor.'},
+    {t:'task',x:'Yağmur gibi söyle: tıp tıp!',h:'tıp ... tıp',fx:'sincap',a:'Damlalar camdan kayıp gitti.'},
+    {t:'say',x:'Uçak biraz sallanıyor. Ama korkma, Kanat güçlü bir uçak.'},
+    {t:'task',x:'Yolculara söyle: sakin olun!',h:'sa... kin ... o... lun',fx:'koro',a:'Yolcular sakinleşti.'},
+    {t:'choice',x:'Bulutların üstünden mi gidelim, altından mı?',r:'Üst mü, alt mı?',o:[
+      {w:['üst','üstünden','üstten','üstü','üstte'],go:'ust'},
+      {w:['alt','altından','alttan','altı','altta'],go:'alt'}]}
+  ],
+  ust:[
+    {t:'task',x:'Yukarı çık! Söyle: yukarı!',h:'yu... ka... rı',fx:'robot',a:'Bulutların üstüne çıktık. Güneş parlıyor!'},
+    {t:'go',to:'inis'}
+  ],
+  alt:[
+    {t:'task',x:'Aşağı in! Söyle: aşağı!',h:'a... şa... ğı',fx:'robot',a:'Bulutların altından geçtik. Aaa, bir gökkuşağı!'},
+    {t:'go',to:'inis'}
+  ],
+  inis:[
+    {t:'say',x:'Fırtına geride kaldı. Tatil yerimize geldik!'},
+    {t:'task',x:'Kuleye söyle: inmek istiyorum!',h:'in... mek ... is... ti... yo... rum',fx:'robot',a:'Kule: Pist senin, Kanat! İnebilirsin.'},
+    {t:'task',x:'Tekerlekleri indir. Söyle: tekerlek!',h:'te... ker... lek',fx:'normal',a:'Tekerlekler açıldı!'},
+    {t:'sfx',s:'ucak'},
+    {t:'say',x:'Hop! Yere indik.'},
+    {t:'sfx',s:'anons'},
+    {t:'task',x:'Anons yap: hoş geldiniz!',h:'hoş ... gel... di... niz',fx:'tunel',a:'Yolcular alkışladı!'},
+    {t:'task',x:'Bana da söyle: teşekkürler Kanat!',h:'te... şek... kür... ler ... ka... nat',fx:'dev',a:'Rica ederim pilot! İyi tatiller!'}
+  ]
+  }
+});
+
+/* ---------------- 9. SAFARİ OTOBÜSÜ ---------------- */
+STORIES.push({
+  id:'safari', icon:'🦁', title:'Safari Otobüsü', desc:'Aslan, fil, zürafa ve papağan', endSfx:'korna',
+  ending:'Harika bir kaşiftin! Bütün hayvanlar seni sevdi.',
+  scenes:{
+  start:[
+    {t:'sfx',s:'motor'},
+    {t:'say',x:'Merhaba kaşif! Ben Pati, yeşil bir safari otobüsü. Bugün vahşi hayvanları görmeye gidiyoruz!'},
+    {t:'task',x:'Söyle: safari!',h:'sa... fa... ri',fx:'koro',a:'Safari başlıyor!'},
+    {t:'task',x:'Kemerini tak ve söyle: hadi gidelim!',h:'ha... di ... gi... de... lim',fx:'dev',a:'Yola çıktık!'},
+    {t:'task',x:'Uzağı görmek için söyle: dürbün!',h:'dür... bün',fx:'normal',a:'Her şey kocaman görünüyor!'},
+    {t:'say',x:'Uzun otların arasında sarı biri yatıyor. Kocaman yelesi var...'},
+    {t:'task',x:'Bu bir aslan! Aslan gibi kükre: rrraaar!',h:'rrr... aaar',fx:'dev',a:'Aslan da kükredi. Ama dostça!'},
+    {t:'task',x:'Söyle: aslan!',h:'as... lan',fx:'dev',a:'Aslan sana göz kırptı.'},
+    {t:'task',x:'Yanında minik bir aslan var. Söyle: yavru!',h:'yav... ru',fx:'sincap',a:'Minik yavru incecik kükredi!'},
+    {t:'say',x:'Yolun ortasında kocaman, gri biri duruyor. Uzun bir burnu var!'},
+    {t:'task',x:'Bu bir fil! Söyle: fil!',h:'fil',fx:'dev',a:'Fil hortumunu kaldırdı!'},
+    {t:'task',x:'Fil gibi ses çıkar: pırrııı!',h:'pır... rııı',fx:'dev',a:'Fil seninle yarıştı!'},
+    {t:'task',x:'Fil acıkmış. Ona ver: fıstık!',h:'fıs... tık',fx:'dev',a:'Fil fıstıkları hortumuyla aldı!'},
+    {t:'sfx',s:'su'},
+    {t:'say',x:'Fil hortumuyla su püskürttü! Otobüs sırılsıklam oldu!'},
+    {t:'task',x:'Gülerek söyle: ıslandık!',h:'ıs... lan... dık',fx:'koro',a:'Herkes kahkahalarla gülüyor!'},
+    {t:'choice',x:'Şimdi nereye gidelim? Ağaçlara mı, nehre mi?',r:'Ağaç mı, nehir mi?',o:[
+      {w:['ağaç','ağaçlara','ağaca','agac','ağacı','ağaçlar'],go:'agac',x:'Ağaçlara gidiyoruz!'},
+      {w:['nehir','nehre','nehri','neyir','nehire'],go:'nehir',x:'Nehre gidiyoruz!'}]}
+  ],
+  agac:[
+    {t:'say',x:'Ağaçların tepesinde uzun boyunlu biri yaprak yiyor.'},
+    {t:'task',x:'Bu bir zürafa! Söyle: zürafa!',h:'zü... ra... fa',fx:'sincap',a:'Zürafa uzun boynunu eğdi, seni kokladı!'},
+    {t:'say',x:'Dalda rengarenk bir kuş var. Senin gibi konuşmayı seviyor!'},
+    {t:'task',x:'Bu bir papağan! Söyle: papağan!',h:'pa... pa... ğan',fx:'sincap',a:'Papağan seni taklit etti!'},
+    {t:'task',x:'Papağana bir kelime öğret: merhaba!',h:'mer... ha... ba',fx:'sincap',a:'Papağan dedi ki: merhaba, merhaba!'},
+    {t:'go',to:'kamp'}
+  ],
+  nehir:[
+    {t:'say',x:'Nehre geldik. Suda kocaman bir ağız açıldı. Hap!'},
+    {t:'task',x:'Bu bir timsah! Söyle: timsah!',h:'tim... sah',fx:'dev',a:'Timsah dişlerini gösterdi. Ama sadece gülüyor!'},
+    {t:'say',x:'Suda kocaman, yuvarlak biri daha var.'},
+    {t:'task',x:'Bu bir su aygırı! Söyle: su aygırı!',h:'su ... ay... gı... rı',fx:'dev',a:'Su aygırı ağzını kocaman açtı. Esniyormuş!'},
+    {t:'task',x:'Ona sor: uykun mu var?',h:'uy... kun ... mu ... var',fx:'sincap',a:'Su aygırı başını salladı ve suya daldı.'},
+    {t:'sfx',s:'su'},
+    {t:'go',to:'kamp'}
+  ],
+  kamp:[
+    {t:'say',x:'Akşam oluyor. Kamp alanına geldik.'},
+    {t:'task',x:'Ateşin yanına otur ve söyle: kamp ateşi!',h:'kamp ... a... te... şi',fx:'normal',a:'Çıtır çıtır yanıyor.'},
+    {t:'task',x:'Ateşte bir şey pişiyor. Söyle: mısır!',h:'mı... sır',fx:'sincap',a:'Pıt pıt pıt! Mısırlar patladı!'},
+    {t:'task',x:'Gökyüzüne bak ve söyle: yıldızlar!',h:'yıl... dız... lar',fx:'tunel',a:'Gökyüzü yıldız dolu!'},
+    {t:'say',x:'Uzaktan bir ses geliyor: Auuuu...'},
+    {t:'task',x:'Kurt gibi uluyalım: auuu!',h:'a... uuu',fx:'tunel',a:'Kurtlar da sana cevap verdi!'},
+    {t:'choice',x:'Bu gece kimi ziyaret edelim? Baykuşu mu, ateş böceklerini mi?',r:'Baykuş mu, böcek mi?',o:[
+      {w:['baykuş','baykuşu','baykus','bayku','baykuşa'],go:'baykus'},
+      {w:['böcek','böcekleri','ateş','böcekler','bocek','böceği'],go:'bocek'}]}
+  ],
+  baykus:[
+    {t:'task',x:'Baykuşa sor: uyumadın mı?',h:'u... yu... ma... dın ... mı',fx:'dev',a:'Baykuş dedi ki: Ben gece uyumam, gündüz uyurum!'},
+    {t:'go',to:'son'}
+  ],
+  bocek:[
+    {t:'task',x:'Ateş böceklerine söyle: parlayın!',h:'par... la... yın',fx:'koro',a:'Yüzlerce minik ışık yandı. Ne güzel!'},
+    {t:'go',to:'son'}
+  ],
+  son:[
+    {t:'say',x:'Safari bitti. Otobüs eve dönüyor.'},
+    {t:'sfx',s:'motor'},
+    {t:'task',x:'Bugün gördüğün en büyük hayvanı söyle: fil!',h:'fil',fx:'dev',a:'Evet, en büyüğü fildi!'},
+    {t:'task',x:'Hayvanlara söyle: iyi geceler hayvanlar!',h:'i... yi ... ge... ce... ler ... hay... van... lar',fx:'koro',a:'Bütün hayvanlar sana iyi geceler dedi!'},
+    {t:'task',x:'Bana da söyle: teşekkürler Pati!',h:'te... şek... kür... ler ... pa... ti',fx:'sincap',a:'Rica ederim kaşif! Bir dahaki safaride görüşürüz!'}
+  ]
+  }
+});
+
+/* ---------------- 10. AY IŞIĞI EKSPRESİ (uyku öncesi) ---------------- */
+STORIES.push({
+  id:'gece', icon:'🌙', title:'Ay Işığı Ekspresi', desc:'Uyku öncesi sakin tren yolculuğu', endSfx:null,
+  ending:'Tatlı rüyalar, küçük yolcu.',
+  scenes:{
+  start:[
+    {t:'sfx',s:'anons'},
+    {t:'say',x:'İyi akşamlar yolcu. Ben Ay Işığı Ekspresi, gece giden yataklı bir tren.'},
+    {t:'say',x:'Bu gece karlı dağlardan geçeceğiz. Hadi trene binelim.'},
+    {t:'task',x:'Kondüktör amcaya söyle: bilet!',h:'bi... let',fx:'dev',a:'Kondüktör amca biletini deldi. Çıt!'},
+    {t:'sfx',s:'duduk'},
+    {t:'task',x:'Tren kalkıyor. Söyle: çuf çuf!',h:'çuf ... çuf',fx:'dev',a:'Yola çıktık!'},
+    {t:'sfx',s:'cufcuf'},
+    {t:'say',x:'Odamıza geldik. Küçük bir yatak, yumuşak bir yastık var.'},
+    {t:'task',x:'Söyle: yastık!',h:'yas... tık',fx:'normal',a:'Pofuduk bir yastık!'},
+    {t:'task',x:'Söyle: battaniye!',h:'bat... ta... ni... ye',fx:'normal',a:'Sıcacık bir battaniye.'},
+    {t:'task',x:'Pijamanı giy ve söyle: pijama!',h:'pi... ja... ma',fx:'sincap',a:'Yumuşacık pijamalar!'},
+    {t:'task',x:'Diş fırçanı al ve söyle: fırçala!',h:'fır... ça... la',fx:'sincap',a:'Fırça fırça, dişler pırıl pırıl!'},
+    {t:'say',x:'Pencereden bakıyoruz. Dışarıda kar yağıyor. Lapa lapa...'},
+    {t:'task',x:'Kar tanelerini say: bir, iki, üç!',h:'bir ... i... ki ... üç',fx:'koro',a:'Kar taneleri camda dans ediyor.'},
+    {t:'choice',x:'Uyumadan önce sıcak bir şey içelim mi? Süt mü, ıhlamur mu?',r:'Süt mü, ıhlamur mu?',o:[
+      {w:['süt','sütü','sut','süd','süt olsun'],go:'sut'},
+      {w:['ıhlamur','ılamur','ıhlamuru','lamur','hlamur','ihlamur'],go:'ihlamur'}]}
+  ],
+  sut:[
+    {t:'task',x:'Söyle: sıcak süt!',h:'sı... cak ... süt',fx:'normal',a:'Mmm, ballı sıcacık süt!'},
+    {t:'go',to:'gece'}
+  ],
+  ihlamur:[
+    {t:'task',x:'Söyle: ıhlamur!',h:'ıh... la... mur',fx:'normal',a:'Mis gibi kokan sıcak ıhlamur!'},
+    {t:'go',to:'gece'}
+  ],
+  gece:[
+    {t:'sfx',s:'cufcuf'},
+    {t:'say',x:'Tren bir köprüden geçiyor. Aşağıda donmuş bir nehir var.'},
+    {t:'task',x:'Söyle: buz!',h:'buz',fx:'tunel',a:'Buz parıl parıl parlıyor.'},
+    {t:'say',x:'Karların arasında küçük biri var. Kuyruğu turuncu, pofuduk.'},
+    {t:'task',x:'Bu bir tilki! Söyle: tilki!',h:'til... ki',fx:'sincap',a:'Tilki kulaklarını dikti.'},
+    {t:'task',x:'Tilkiye fısılda: merhaba tilki!',h:'mer... ha... ba ... til... ki',fx:'sincap',a:'Tilki kuyruğunu sallayıp ormana koştu.'},
+    {t:'say',x:'Tren karlı küçük bir istasyonda durdu.'},
+    {t:'task',x:'Söyle: istasyon!',h:'is... tas... yon',fx:'normal',a:'İstasyon şefi fenerini salladı.'},
+    {t:'say',x:'Tren yine yola çıktı ve bir tünele girdi. Her yer karanlık.'},
+    {t:'task',x:'Tünelde fısılda: hu huu!',h:'hu ... huu',fx:'tunel',a:'Tünel de fısıldadı: hu huu...'},
+    {t:'say',x:'Tünelden çıktık. Gökyüzünde kocaman, yuvarlak bir ay var.'},
+    {t:'task',x:'Ay\'a söyle: iyi geceler Ay!',h:'i... yi ... ge... ce... ler ... ay',fx:'tunel',a:'Ay sana gülümsedi.'},
+    {t:'choice',x:'Şimdi ne yapalım? Yıldızları mı sayalım, dilek mi tutalım?',r:'Yıldız mı, dilek mi?',o:[
+      {w:['yıldız','yıldızları','yıldızlar','yıldızı','yıdız'],go:'yildiz'},
+      {w:['dilek','dileği','dilek tutalım','dile','diley'],go:'dilek'}]}
+  ],
+  yildiz:[
+    {t:'task',x:'Yıldızları say: bir, iki, üç, dört, beş!',h:'bir ... i... ki ... üç ... dört ... beş',fx:'koro',a:'O kadar çok yıldız var ki sayamıyoruz!'},
+    {t:'go',to:'uyku'}
+  ],
+  dilek:[
+    {t:'task',x:'Kayan yıldıza dilek tut. Fısılda: dileğim var!',h:'di... le... ğim ... var',fx:'sincap',a:'Şşşt, dilek sır olarak kalsın.'},
+    {t:'go',to:'uyku'}
+  ],
+  uyku:[
+    {t:'say',x:'Tren yavaş yavaş gidiyor. Tıkır tıkır, tıkır tıkır...'},
+    {t:'task',x:'Tren gibi söyle: tıkır tıkır!',h:'tı... kır ... tı... kır',fx:'normal',a:'Ne güzel bir ninni gibi.'},
+    {t:'task',x:'Lambayı kapatalım. Söyle: kapat!',h:'ka... pat',fx:'normal',a:'Klik. Oda karanlık ve sakin.'},
+    {t:'say',x:'Kondüktör amca koridorda fısıldıyor: Herkes uyusun.'},
+    {t:'task',x:'Esneyerek söyle: uykum geldi!',h:'uy... kum ... gel... di',fx:'dev',a:'Benim de uykum geldi.'},
+    {t:'task',x:'Yastığına söyle: iyi geceler yastık!',h:'i... yi ... ge... ce... ler ... yas... tık',fx:'sincap',a:'Yastık seni yumuşacık sardı.'},
+    {t:'task',x:'Trene söyle: iyi geceler Ay Işığı!',h:'i... yi ... ge... ce... ler ... ay ... ı... şı... ğı',fx:'tunel',a:'İyi geceler küçük yolcu. Sabah olunca yeni maceralar seni bekliyor.'}
+  ]
+  }
+});
+
 let PLAYED={};
 try{PLAYED=JSON.parse(localStorage.getItem('sy_played')||'{}');}catch(e){}
 function markPlayed(id){PLAYED[id]=(PLAYED[id]||0)+1;try{localStorage.setItem('sy_played',JSON.stringify(PLAYED));}catch(e){}}
@@ -1435,7 +1852,7 @@ $('pitch').oninput=e=>{VS.pitch=+e.target.value;saveVS();renderSliders();};
 $('btnVoice').onclick=()=>say('Merhaba küçük makinist! Ben Düdük, çuf çuf tren. Bugün hayvan arkadaşlarımızı alıp pikniğe gideceğiz.');
 /* ---------- Ses laboratuvarı ---------- */
 const SFX_NAMES={duduk:'Tren düdüğü',cufcuf:'Çuf çuf (buharlı tren)',hizli:'Hızlı tren geçişi',fren:'Araba freni (lastik cıyaklaması)',kapi:'Metro kapısı',
-  korna:'Araba kornası',motor:'Araba motoru',roket:'Roket',bipbip:'Uzay bilgisayarı bip bip',ding:'Ödül sesi',metrofren:'Metro freni',cufcufYeni:'Çuf çuf (yeni deneme)'};
+  korna:'Araba kornası',motor:'Araba motoru',roket:'Roket',bipbip:'Uzay bilgisayarı bip bip',ding:'Ödül sesi',metrofren:'Metro freni',cufcufYeni:'Çuf çuf (yeni deneme)',siren:'İtfaiye sireni',su:'Su fışkırması',vapur:'Vapur düdüğü',ucak:'Uçak kalkışı',anons:'Anons zili'};
 function sfxUsage(){
   const u={};
   STORIES.forEach(s=>Object.values(s.scenes).forEach(sc=>sc.forEach(n=>{if(n.t==='sfx'){u[n.s]=u[n.s]||new Set();u[n.s].add(s.title);}})));
@@ -1485,7 +1902,7 @@ renderVoices();
 renderList();
 renderLab();
 showSupport();
-log('Sayfa hazır (Faz 3.4)');
+log('Sayfa hazır (Faz 4.0)');
 loadSfxFiles();
 </script>
 </body>
