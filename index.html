@@ -88,9 +88,20 @@ details summary{cursor:pointer;color:var(--blue);font-size:14px}
 </div>
 
 <div class="card">
+  <h2>Ses laboratuvarı</h2>
+  <p><b>Efekt sesleri:</b> Her birini dinle, beğenmediklerinin numarasını söyle.</p>
+  <div id="sfxList"></div>
+  <p style="margin-top:14px"><b>Ses değiştirici denemesi:</b> Kaydet'e bas, anlatıcı "söyle" deyince <b>hemen</b> bir kelime söyle. Sonra efektleri tek tek dinle.</p>
+  <div class="small" style="margin-bottom:6px">Ses değiştirici sürümü:</div>
+  <button class="ghost vmode" data-m="yeni">Yeni</button>
+  <button class="ghost vmode" data-m="eski">Eski (Faz 3.0)</button>
+  <div style="margin-top:10px"><button class="alt" id="btnLabRec">Kaydet</button> <span class="small" id="labInfo"></span></div>
+  <div id="labFx" style="margin-top:8px"></div>
+</div>
+
+<div class="card">
   <details><summary>Teknik günlük</summary>
     <div class="small" id="support" style="margin-top:8px"></div>
-    <div id="sfxBtns" style="margin-top:8px"></div>
     <div id="log"></div>
   </details>
 </div>
@@ -109,6 +120,7 @@ window.addEventListener('error',e=>log('Hata: '+e.message+' (satır '+e.lineno+'
 window.addEventListener('unhandledrejection',e=>log('Hata: '+((e.reason&&e.reason.message)||e.reason)));
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 let ctx=null,busy=false,parentSkip=null,parentAlt=null,last=null;
+let ring=null,ringPos=0,proc=null,calibrated=false,sayEndPos=-1;
 function getCtx(){if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();return ctx;}
 
 /* ---------- Anlatıcı (TTS) ---------- */
@@ -132,7 +144,7 @@ function say(text,opt){
     const u=new SpeechSynthesisUtterance(text);
     u.lang='tr-TR';if(trVoice)u.voice=trVoice;
     u.rate=opt.rate||VS.rate;u.pitch=opt.pitch||VS.pitch;
-    let done=false;const fin=()=>{if(!done){done=true;setTimeout(res,300);}};
+    let done=false;const fin=()=>{if(!done){done=true;sayEndPos=ringPos;setTimeout(res,opt.post!=null?opt.post:300);}};
     u.onend=fin;u.onerror=fin;
     speechSynthesis.speak(u);
     setTimeout(fin,2000+text.length*120);
@@ -163,52 +175,90 @@ async function startMic(){
   if(!sink){sink=c.createGain();sink.gain.value=0;sink.connect(c.destination);}
   analyser.connect(sink);
   buf32=new Float32Array(analyser.fftSize);
+  if(!ring)ring=new Float32Array(Math.floor(c.sampleRate*15));
+  proc=c.createScriptProcessor(1024,1,1);
+  proc.onaudioprocess=e=>{const d=e.inputBuffer.getChannelData(0),L=ring.length;for(let i=0;i<d.length;i++)ring[(ringPos+i)%L]=d[i];ringPos+=d.length;};
+  micSrc.connect(proc);proc.connect(sink);
+  if(calibrated){
+    const p0=ringPos;await new Promise(r=>{const t1=performance.now(),iv=setInterval(()=>{if(ringPos>p0||performance.now()-t1>600){clearInterval(iv);r();}},20);});
+    log('Mikrofon yeniden açıldı');return true;
+  }
   let s=0,n=0,peak=0;const t0=performance.now();
   await new Promise(r=>{const iv=setInterval(()=>{const l=level();s+=l;n++;if(l>peak)peak=l;if(performance.now()-t0>800){clearInterval(iv);r();}},30);});
   noiseFloor=s/Math.max(1,n);
   if(peak===0&&!rawMode){log('Mikrofondan veri gelmiyor, yedek modla tekrar deniyorum...');stopMic();rawMode=true;return startMic();}
   if(peak===0)log('UYARI: Mikrofon açık ama ses verisi sıfır. Ses motoru: '+c.state);
-  updateThreshold();
+  updateThreshold();calibrated=true;
   if(!meterTimer)meterTimer=setInterval(()=>{const l=level();const b=$('meterBar');b.style.width=Math.min(100,l/0.25*100)+'%';b.style.background=l>threshold?'var(--orange)':'#9bb6e0';$('rawLvl').textContent='Anlık seviye: '+l.toFixed(3)+' | ses motoru: '+(ctx?ctx.state:'-');},100);
   log('Mikrofon hazır. Ortam gürültüsü: '+noiseFloor.toFixed(3));
   return true;
 }
-function stopMic(){if(micSrc){try{micSrc.disconnect();}catch(e){}micSrc=null;}if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}analyser=null;}
+function stopMic(){if(proc){try{proc.disconnect();}catch(e){}proc.onaudioprocess=null;proc=null;}if(micSrc){try{micSrc.disconnect();}catch(e){}micSrc=null;}if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}analyser=null;}
 
-/* ---------- Dinle + kaydet ---------- */
+/* ---------- Dinle + kaydet (ön kayıt tamponu) ----------
+   Mikrofon açık olduğu sürece son 15 saniye hep hafızada tutulur.
+   Dinleme, anlatıcının sustuğu andan itibaren geriye dönük başlar;
+   çocuk hemen cevap verse bile kelimenin başı kaybolmaz. */
+function getRing(from,to){
+  const L=ring.length;from=Math.max(from,ringPos-L+1,0);to=Math.min(to,ringPos);
+  const n=Math.max(0,to-from),out=new Float32Array(n);
+  for(let i=0;i<n;i++)out[i]=ring[(from+i)%L];
+  return out;
+}
 async function listenAndRecord(o){
   o=o||{};const maxWait=o.maxWait||8000,maxLen=o.maxLen||5000,silence=o.silence||1300;
   if(!await startMic())return {result:'nomic'};
-  const c=getCtx();
-  let rec;try{rec=new MediaRecorder(micStream);}catch(e){log('Kayıt desteklenmiyor: '+e.message);return {result:'norec'};}
-  const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
-  rec.start(100);log('Dinliyorum...');
-  const result=await new Promise(res=>{
-    const t0=performance.now();let voiceAt=0,lastVoice=0,voicedMs=0,iv=null;
-    parentSkip=()=>{clearInterval(iv);res('parent');};
-    parentAlt=()=>{clearInterval(iv);res('parent2');};
-    iv=setInterval(()=>{
-      const now=performance.now(),l=level();
-      if(l>threshold){if(!voiceAt)voiceAt=now;lastVoice=now;voicedMs+=30;}
-      if(voiceAt&&now-lastVoice>silence){
-        if(voicedMs>=150){clearInterval(iv);return res('voice');}
-        voiceAt=0;voicedMs=0;
+  const c=getCtx(),sr=c.sampleRate,win=Math.floor(sr*0.02),L=ring.length;
+  const rmsAt=i=>{let s=0;for(let j=0;j<win;j++){const v=ring[(i+j)%L];s+=v*v;}return Math.sqrt(s/win);};
+  let start=ringPos-Math.floor(sr*0.3);
+  const recentSay=sayEndPos>0&&ringPos-sayEndPos<sr*3;
+  if(recentSay)start=Math.min(start,sayEndPos-Math.floor(sr*0.15));
+  start=Math.max(0,start,ringPos-L+sr);
+  /* Anlatıcının son hecesi kayda girmesin: en baştaki ses parçasının
+     ardından kısa bir sessizlik varsa, başlangıcı o sessizliğe kaydır */
+  if(recentSay){
+    const need=sayEndPos+Math.floor(sr*0.12);
+    if(ringPos<need)await new Promise(r=>{const t1=performance.now(),iv=setInterval(()=>{if(ringPos>=need||performance.now()-t1>400){clearInterval(iv);r();}},15);});
+    const lim=Math.min(ringPos,sayEndPos+Math.floor(sr*0.1));
+    if(rmsAt(start)>threshold||rmsAt(start+win)>threshold){
+      let silent=0;
+      for(let i=start;i+win<=lim;i+=win){
+        if(rmsAt(i)>threshold)silent=0;
+        else if(++silent>=2){start=i-win;break;}
       }
-      if(voiceAt&&now-voiceAt>maxLen){clearInterval(iv);return res('voice');}
-      if(!voiceAt&&now-t0>maxWait){clearInterval(iv);return res('timeout');}
-    },30);
+    }
+  }
+  log('Dinliyorum... (ön kayıt '+((ringPos-start)/sr).toFixed(2)+' sn)');
+  let cur=start,voiceStart=-1,lastVoice=-1,voicedWins=0;
+  const silS=sr*silence/1000,maxLenS=sr*maxLen/1000;
+  const result=await new Promise(res=>{
+    const t0=performance.now();let iv=null,fin=false;
+    const done=v=>{if(fin)return;fin=true;clearInterval(iv);res(v);};
+    parentSkip=()=>done('parent');parentAlt=()=>done('parent2');
+    iv=setInterval(()=>{
+      while(!fin&&cur+win<=ringPos){
+        let s=0;for(let j=0;j<win;j++){const v=ring[(cur+j)%L];s+=v*v;}
+        if(Math.sqrt(s/win)>threshold){if(voiceStart<0)voiceStart=cur;lastVoice=cur+win;voicedWins++;}
+        cur+=win;
+        if(voiceStart>=0&&cur-lastVoice>silS){
+          if(voicedWins>=7)return done('voice');
+          voiceStart=-1;voicedWins=0;
+        }
+        if(voiceStart>=0&&cur-voiceStart>maxLenS)return done('voice');
+      }
+      if(voiceStart<0&&performance.now()-t0>maxWait)done('timeout');
+    },40);
   });
   parentSkip=null;parentAlt=null;
-  await new Promise(r=>setTimeout(r,250));
-  await new Promise(r=>{rec.onstop=r;try{rec.stop();}catch(e){r();}});
   log('Dinleme sonucu: '+result);
   if(result!=='voice')return {result};
-  try{
-    const blob=new Blob(chunks,{type:rec.mimeType||'audio/webm'});
-    const decoded=await c.decodeAudioData(await blob.arrayBuffer());
-    const t=trimBuffer(decoded);
-    return {result,buf:t.buf,gain:t.gain};
-  }catch(e){log('Ses çözülemedi: '+e.message);return {result:'voice'};}
+  const from=Math.max(start,voiceStart-Math.floor(sr*0.25));
+  const to=Math.min(ringPos,lastVoice+Math.floor(sr*0.5));
+  const seg=getRing(from,to);
+  const b=c.createBuffer(1,Math.max(1,seg.length),sr);b.copyToChannel(seg,0);
+  const t=trimBuffer(b);
+  log('Kayıt: '+t.buf.duration.toFixed(2)+' sn');
+  return {result,buf:t.buf,gain:t.gain};
 }
 /* Sessiz baş/son kısmı kırp: 20 ms'lik pencerelerin ortalama gücüne bakar,
    kelime sonundaki yumuşak sesleri (f, s, ş) kesmemek için sona bol pay bırakır */
@@ -251,7 +301,7 @@ function pitchShift(buf,pitch,speed){
   const b=c.createBuffer(1,outLen,sr);b.copyToChannel(out,0);return b;
 }
 const fxCache=new WeakMap();
-function fxBuffer(buf,effect){
+function fxBufferOld(buf,effect){
   let m=fxCache.get(buf);if(!m){m={};fxCache.set(buf,m);}
   if(!m[effect]){
     if(effect==='dev')m[effect]=pitchShift(buf,0.62,0.92);
@@ -261,11 +311,11 @@ function fxBuffer(buf,effect){
   return m[effect];
 }
 
-/* ---------- Ses değiştirici ---------- */
-function playVoice(buf,gainVal,effect){
+/* ---------- Ses değiştirici (ESKİ, Faz 3.0) ---------- */
+function playVoiceOldBase(buf,gainVal,effect){
   const c=getCtx();
   return new Promise(res=>{
-    const src=c.createBufferSource();src.buffer=fxBuffer(buf,effect);
+    const src=c.createBufferSource();src.buffer=fxBufferOld(buf,effect);
     const g=c.createGain();g.gain.value=gainVal;
     let out=g,tail=0,osc=null;
     if(effect==='sincap'){
@@ -294,6 +344,121 @@ function playVoice(buf,gainVal,effect){
     src.start();
   });
 }
+
+/* =========================================================
+   SES DEĞİŞTİRİCİ v2 (YENİ)
+   WSOLA zaman esnetme + yeniden örnekleme: dalga biçimlerini
+   uç uca uyumlu ekler, böylece "titreşimli/boğuk" ses azalır.
+   Ayarlar daha ölçülü: anlaşılırlık önce gelir.
+   ========================================================= */
+function wsola(x,alpha,sr){
+  const N=Math.floor(sr*0.04)&~1,Hs=N>>1,tol=Math.floor(sr*0.01),Ha=Hs/alpha;
+  const outLen=Math.floor(x.length*alpha)+N;
+  const y=new Float32Array(outLen),ws=new Float32Array(outLen);
+  const w=new Float32Array(N);for(let i=0;i<N;i++)w[i]=0.5-0.5*Math.cos(2*Math.PI*i/N);
+  let prev=0,last=0;
+  for(let k=0;;k++){
+    const op=k*Hs;if(op+N>outLen)break;
+    const nom=Math.round(k*Ha);if(nom+N+tol>=x.length)break;
+    let best=0;
+    const ref=prev+Hs;
+    if(k>0&&ref+N<x.length){
+      let bc=-Infinity;
+      for(let d=-tol;d<=tol;d+=2){
+        const p=nom+d;if(p<0)continue;
+        let cc=0;for(let i=0;i<N;i+=4)cc+=x[p+i]*x[ref+i];
+        if(cc>bc){bc=cc;best=d;}
+      }
+    }
+    const p=Math.max(0,nom+best);
+    for(let i=0;i<N;i++){y[op+i]+=x[p+i]*w[i];ws[op+i]+=w[i];}
+    prev=p;last=op+N;
+  }
+  for(let i=0;i<last;i++)if(ws[i]>1e-3)y[i]/=ws[i];
+  return y.subarray(0,Math.max(1,last));
+}
+function pitchShiftNew(buf,pitch,speed){
+  const c=getCtx(),sr=buf.sampleRate,x=buf.getChannelData(0);
+  const st=wsola(x,pitch/speed,sr);
+  const n=Math.max(1,Math.floor(st.length/pitch)),out=new Float32Array(n);
+  for(let i=0;i<n;i++){const p=i*pitch,k=Math.floor(p);const a=st[k]||0,b=st[k+1]||0;out[i]=a+(b-a)*(p-k);}
+  const fade=Math.min(n,Math.floor(sr*0.03));for(let i=0;i<fade;i++)out[n-1-i]*=i/fade;
+  const b=c.createBuffer(1,n,sr);b.copyToChannel(out,0);return b;
+}
+const fxCacheNew=new WeakMap();
+function fxBufferNew(buf,effect){
+  let m=fxCacheNew.get(buf);if(!m){m={};fxCacheNew.set(buf,m);}
+  if(!m[effect]){
+    if(effect==='dev')m[effect]=pitchShiftNew(buf,0.72,0.95);
+    else if(effect==='sincap')m[effect]=pitchShiftNew(buf,1.6,1.12);
+    else m[effect]=buf;
+  }
+  return m[effect];
+}
+function playVoiceNewBase(buf,gainVal,effect){
+  const c=getCtx();
+  return new Promise(res=>{
+    const src=c.createBufferSource();src.buffer=fxBufferNew(buf,effect);
+    const hp=c.createBiquadFilter();hp.type='highpass';hp.frequency.value=90;   // uğultu temizliği
+    src.connect(hp);let node=hp;
+    const g=c.createGain();g.gain.value=gainVal;
+    const lim=c.createDynamicsCompressor();lim.threshold.value=-6;lim.knee.value=6;lim.ratio.value=8;lim.attack.value=0.003;lim.release.value=0.1;
+    g.connect(lim);lim.connect(c.destination);
+    let tail=0,osc=null;
+    if(effect==='sincap'){
+      const pk=c.createBiquadFilter();pk.type='peaking';pk.frequency.value=3000;pk.Q.value=1;pk.gain.value=3;
+      node.connect(pk);node=pk;
+    }else if(effect==='dev'){
+      const ls=c.createBiquadFilter();ls.type='lowshelf';ls.frequency.value=200;ls.gain.value=4;
+      const pr=c.createBiquadFilter();pr.type='peaking';pr.frequency.value=2500;pr.Q.value=1;pr.gain.value=4;   // ünsüzler net kalsın
+      node.connect(ls);ls.connect(pr);node=pr;
+    }
+    if(effect==='robot'){
+      /* Kısmi halka modülasyonu: ses hep duyulur, üstüne metalik vızıltı */
+      const dry=c.createGain();dry.gain.value=0.6;
+      const rm=c.createGain();rm.gain.value=0;
+      osc=c.createOscillator();osc.frequency.value=70;
+      const depth=c.createGain();depth.gain.value=0.7;osc.connect(depth);depth.connect(rm.gain);
+      const mix=c.createGain();node.connect(dry);node.connect(rm);dry.connect(mix);rm.connect(mix);
+      const dl=c.createDelay(0.05);dl.delayTime.value=0.006;const fb=c.createGain();fb.gain.value=0.4;
+      mix.connect(g);mix.connect(dl);dl.connect(fb);fb.connect(dl);dl.connect(g);
+      osc.start();
+    }else if(effect==='tunel'){
+      /* Ana ses net, yankılar daha yumuşak ve daha az */
+      node.connect(g);
+      const dl=c.createDelay(1.0);dl.delayTime.value=0.22;
+      const fb=c.createGain();fb.gain.value=0.32;
+      const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2200;
+      const wet=c.createGain();wet.gain.value=0.5;
+      node.connect(dl);dl.connect(lp);lp.connect(fb);fb.connect(dl);lp.connect(wet);wet.connect(g);
+      tail=1.2;
+    }else node.connect(g);
+    src.onended=()=>{if(osc)osc.stop();setTimeout(res,tail*1000+100);};
+    src.start();
+  });
+}
+function playVoiceNew(buf,gainVal,effect){
+  if(effect!=='koro')return playVoiceNewBase(buf,gainVal,effect);
+  /* Koro: çocuğun kendi sesi önde ve net, kalın/ince sesler arkada fısıltı gibi */
+  const d=(ms,fn)=>new Promise(r=>setTimeout(()=>fn().then(r),ms));
+  return Promise.all([
+    playVoiceNewBase(buf,gainVal,'normal'),
+    d(30,()=>playVoiceNewBase(buf,gainVal*0.35,'dev')),
+    d(60,()=>playVoiceNewBase(buf,gainVal*0.3,'sincap'))
+  ]);
+}
+/* Eski (Faz 3.0) ses değiştirici, karşılaştırma ve geri dönüş için aynen korunuyor */
+function playVoiceOld(buf,gainVal,effect){
+  if(effect!=='koro')return playVoiceOldBase(buf,gainVal,effect);
+  const d=(ms,fn)=>new Promise(r=>setTimeout(()=>fn().then(r),ms));
+  return Promise.all([
+    playVoiceOldBase(buf,gainVal*0.7,'normal'),
+    d(45,()=>playVoiceOldBase(buf,gainVal*0.6,'dev')),
+    d(90,()=>playVoiceOldBase(buf,gainVal*0.5,'sincap'))
+  ]);
+}
+let VFX='yeni';try{VFX=localStorage.getItem('sy_vfx')||'yeni';}catch(e){}
+function playVoice(buf,gainVal,effect){return VFX==='eski'?playVoiceOld(buf,gainVal,effect):playVoiceNew(buf,gainVal,effect);}
 
 /* ---------- Efekt sesleri ---------- */
 function noiseBuffer(sec){const c=getCtx(),b=c.createBuffer(1,Math.floor(c.sampleRate*sec),c.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;return b;}
@@ -479,26 +644,15 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 function dot(on){$('dot').className=on?'on':'';}
 function checkStop(){if(stopped)throw new Error('__stop__');}
 
-/* Koro efekti: çocuğun sesi kalın, normal ve ince tonda aynı anda (bütün yolcular birlikte) */
-const _playVoice=playVoice;
-playVoice=function(buf,gainVal,effect){
-  if(effect!=='koro')return _playVoice(buf,gainVal,effect);
-  const d=(ms,fn)=>new Promise(r=>setTimeout(()=>fn().then(r),ms));
-  return Promise.all([
-    _playVoice(buf,gainVal*0.7,'normal'),
-    d(45,()=>_playVoice(buf,gainVal*0.6,'dev')),
-    d(90,()=>_playVoice(buf,gainVal*0.5,'sincap'))
-  ]);
-};
-
 async function runTask(n){
   tasksTotal++;
-  await say(n.x);checkStop();
+  await startMic();
+  await say(n.x,{post:0});checkStop();
   dot(true);let r=await listenAndRecord();dot(false);checkStop();
   if(r.result==='timeout'){
     await say('Benimle söyle.');
     await say(n.h,{rate:VS.rate*0.7});
-    await say('Hadi sen!');checkStop();
+    await say('Hadi sen!',{post:0});checkStop();
     dot(true);r=await listenAndRecord();dot(false);checkStop();
   }
   if(r.result==='voice'||r.result==='parent'||r.result==='parent2'){
@@ -516,9 +670,10 @@ async function runTask(n){
 async function runChoice(n){
   let chosen=null;
   for(let i=1;i<=2&&!chosen;i++){
-    await say(i===1?n.x:n.r);checkStop();
+    if(SR)stopMic();
+    await say(i===1?n.x:n.r,{post:0});checkStop();
     if(SR){
-      stopMic();dot(true);
+      dot(true);
       const alts=await recognizeOnce(7000);dot(false);checkStop();
       log('Seçimde duyulan: '+(alts.join(' | ')||'(hiçbir şey)'));
       if(alts[0]==='__parent__')chosen=n.o[0];
@@ -1068,7 +1223,7 @@ $('btnRandom').onclick=()=>{const min=Math.min(...STORIES.map(s=>PLAYED[s.id]||0
 function showSupport(){
   const a=[];
   a.push('Türkçe anlatıcı: '+(trVoice?'var ('+trVoice.name+')':'bulunamadı'));
-  a.push('Kayıt: '+(window.MediaRecorder?'var':'yok'));
+  a.push('Kayıt: ön kayıt tamponu');
   a.push('Konuşma tanıma: '+(SR?'var':'yok'));
   $('support').textContent=a.join(' • ');
 }
@@ -1083,13 +1238,53 @@ $('voiceSel').onchange=e=>{trVoice=trVoices[+e.target.value]||trVoice;VS.name=tr
 $('rate').oninput=e=>{VS.rate=+e.target.value;saveVS();renderSliders();};
 $('pitch').oninput=e=>{VS.pitch=+e.target.value;saveVS();renderSliders();};
 $('btnVoice').onclick=()=>say('Merhaba küçük makinist! Ben Düdük, çuf çuf tren. Bugün hayvan arkadaşlarımızı alıp pikniğe gideceğiz.');
-document.getElementById('sfxBtns').innerHTML=Object.keys(SFX).map(k=>'<button class="ghost" style="margin:3px;padding:8px 10px;font-size:14px" data-s="'+k+'">'+k+'</button>').join('');
-document.querySelectorAll('#sfxBtns button').forEach(b=>b.onclick=()=>sfx(b.dataset.s));
+/* ---------- Ses laboratuvarı ---------- */
+const SFX_NAMES={duduk:'Tren düdüğü',cufcuf:'Çuf çuf (buharlı tren)',hizli:'Hızlı tren geçişi',fren:'Fren gıcırtısı',kapi:'Metro kapısı',
+  korna:'Araba kornası',motor:'Araba motoru',roket:'Roket',bipbip:'Uzay bilgisayarı bip bip',ding:'Ödül sesi'};
+function sfxUsage(){
+  const u={};
+  STORIES.forEach(s=>Object.values(s.scenes).forEach(sc=>sc.forEach(n=>{if(n.t==='sfx'){u[n.s]=u[n.s]||new Set();u[n.s].add(s.title);}})));
+  return u;
+}
+function renderLab(){
+  const u=sfxUsage();let i=0,h='';
+  Object.keys(SFX).forEach(k=>{
+    i++;
+    const where=k==='ding'?'Her hikayede, doğru cevaptan sonra':(u[k]?[...u[k]].join(', '):'Kullanılmıyor');
+    h+='<div class="story"><div class="ic" style="font-size:22px;color:var(--orange);font-weight:700">'+i+'</div><div class="tx"><b>'+(SFX_NAMES[k]||k)+'</b><span>'+where+'</span></div><button class="ghost" data-s="'+k+'">▶</button></div>';
+  });
+  $('sfxList').innerHTML=h;
+  $('sfxList').querySelectorAll('button[data-s]').forEach(b=>b.onclick=()=>{getCtx();sfx(b.dataset.s);});
+  const fx=[['normal','Normal'],['dev','Dev'],['sincap','Sincap'],['robot','Robot'],['tunel','Tünel'],['koro','Koro']];
+  $('labFx').innerHTML=fx.map(f=>'<button class="ghost" style="margin:3px" data-f="'+f[0]+'" disabled>'+f[1]+'</button>').join('');
+  $('labFx').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(last&&last.buf)playVoice(last.buf,last.gain,b.dataset.f);});
+  renderVmode();
+}
+function renderVmode(){
+  document.querySelectorAll('.vmode').forEach(b=>{const on=b.dataset.m===VFX;b.style.background=on?'var(--blue)':'var(--blue2)';b.style.color=on?'#fff':'var(--blue)';});
+}
+document.querySelectorAll('.vmode').forEach(b=>b.onclick=()=>{VFX=b.dataset.m;try{localStorage.setItem('sy_vfx',VFX);}catch(e){}renderVmode();log('Ses değiştirici: '+VFX);});
+$('btnLabRec').onclick=async()=>{
+  if(busy)return;busy=true;
+  try{
+    getCtx();
+    if(!await startMic()){$('labInfo').textContent='Mikrofon açılamadı';return;}
+    $('labInfo').textContent='Dinliyorum...';
+    await say('Bir kelime söyle!',{post:0});
+    const r=await listenAndRecord();
+    if(r.buf){
+      last=r;$('labFx').querySelectorAll('button').forEach(b=>b.disabled=false);
+      $('labInfo').textContent='Kayıt: '+r.buf.duration.toFixed(1)+' sn. Efektleri dinle.';
+      await playVoice(r.buf,r.gain,'normal');
+    }else $('labInfo').textContent='Ses duyulmadı, tekrar dene.';
+  }finally{busy=false;}
+};
 renderSliders();
 renderVoices();
 renderList();
+renderLab();
 showSupport();
-log('Sayfa hazır (Faz 3.0)');
+log('Sayfa hazır (Faz 3.1)');
 </script>
 </body>
 </html>
