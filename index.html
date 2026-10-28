@@ -90,6 +90,7 @@ details summary{cursor:pointer;color:var(--blue);font-size:14px}
 <div class="card">
   <h2>Ses laboratuvarı</h2>
   <p><b>Efekt sesleri:</b> Her birini dinle, beğenmediklerinin numarasını söyle.</p>
+  <p class="small">Gerçek kayıt kullanmak için GitHub'a <b>ses-motor.mp3</b>, <b>ses-metrofren.mp3</b> gibi dosya yükle. Yüklenen kayıt turuncu çerçeveyle görünür, başlangıç saniyesi ve süresi buradan ayarlanır.</p>
   <div id="sfxList"></div>
   <p style="margin-top:14px"><b>Ses değiştirici denemesi:</b> Kaydet'e bas, anlatıcı "söyle" deyince <b>hemen</b> bir kelime söyle. Sonra efektleri tek tek dinle.</p>
   <div class="small" style="margin-bottom:6px">Ses değiştirici sürümü:</div>
@@ -468,8 +469,7 @@ const SFX={
   duduk(){const c=getCtx(),t=c.currentTime,f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=1800;
     const g=c.createGain();env(g,t,0.08,1.0,0.3,0.18);f.connect(g);g.connect(c.destination);
     [311,370,466].forEach(fr=>{const o=c.createOscillator();o.type='sawtooth';o.frequency.value=fr;o.connect(f);o.start(t);o.stop(t+1.5);});return 1500;},
-  /* Buharlı lokomotif kalkışı v3 (yumuşak): baştaki pşşş aynen, çuflar daha yumuşak başlar,
-     sert tıslama azaltıldı, tını koyulaştırıldı, yankı biraz daha uzaktan */
+  /* Buharlı lokomotif kalkışı v2 (beğenilen sürüm): pşşş + pürüzlü buhar çufları + sürekli buhar + yankı */
   cufcuf(){
     const c=getCtx(),sr=c.sampleRate,t0=c.currentTime+0.05;
     /* Pürüzlü buhar gürültüsü: beyaz gürültü, 15-40 Hz'lik rastgele dalgalanmayla modüle edilir (türbülans) */
@@ -484,15 +484,14 @@ const SFX={
     const irLen=Math.floor(sr*1.6),ir=c.createBuffer(2,irLen,sr);
     for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<irLen;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/irLen,3.5);}
     const conv=c.createConvolver();conv.buffer=ir;
-    const wet=c.createGain();wet.gain.value=0.3;
+    const wet=c.createGain();wet.gain.value=0.22;
     const dry=c.createGain();dry.gain.value=0.85;
     const bus=c.createGain();bus.gain.value=1;
     const comp=c.createDynamicsCompressor();comp.threshold.value=-16;comp.ratio.value=3;
     bus.connect(dry);bus.connect(conv);conv.connect(wet);
     dry.connect(comp);wet.connect(comp);
-    const master=c.createGain();master.gain.value=1.18;comp.connect(master);master.connect(c.destination);
-    const soft=c.createBiquadFilter();soft.type='lowpass';soft.frequency.value=3200;soft.Q.value=0.5;soft.connect(bus);
-    function steam(t,att,hold,dur,type,f1,f2,q,peak,dest){
+    const master=c.createGain();master.gain.value=1;comp.connect(master);master.connect(c.destination);
+    function steam(t,att,hold,dur,type,f1,f2,q,peak){
       const s=c.createBufferSource();s.buffer=rough;
       const f=c.createBiquadFilter();f.type=type;f.Q.value=q;
       f.frequency.setValueAtTime(f1,t);if(f2)f.frequency.linearRampToValueAtTime(f2,t+dur);
@@ -500,12 +499,12 @@ const SFX={
       g.gain.exponentialRampToValueAtTime(peak,t+att);
       g.gain.setValueAtTime(peak,t+att+hold);
       g.gain.exponentialRampToValueAtTime(0.0001,t+att+hold+dur);
-      s.connect(f);f.connect(g);g.connect(dest||soft);
+      s.connect(f);f.connect(g);g.connect(bus);
       s.start(t,Math.random()*2);s.stop(t+att+hold+dur+0.05);
     }
     /* 1. Kalkış: buhar fışkırması "pşşşş" (beğenilen kısım, aynen korundu) */
-    steam(t0,0.06,0.1,1.0,'highpass',2500,1200,0.5,0.35,bus);
-    steam(t0,0.04,0.05,0.85,'bandpass',900,400,0.6,0.25,bus);
+    steam(t0,0.06,0.1,1.0,'highpass',2500,1200,0.5,0.35);
+    steam(t0,0.04,0.05,0.85,'bandpass',900,400,0.6,0.25);
     /* 2. Çuflar: her biri küçük bir pşşş. Yavaştan hızlıya, 4'lü vurgu */
     const n=16,accent=[1,0.72,0.88,0.66];
     let t=t0+1.15;
@@ -515,23 +514,23 @@ const SFX={
       const a=accent[i%4]*(0.88+Math.random()*0.24);
       const body=Math.min(0.75,period*0.8);
       const tt=t+(Math.random()-0.5)*0.02;
-      steam(tt,0.035,0.03,body,'bandpass',600,450,0.6,0.55*a);          // "çuf" gövdesi
-      steam(tt+0.01,0.04,0.02,body*1.1,'highpass',1500,1000,0.5,0.2*a);  // buhar tıslaması
-      steam(tt,0.015,0.0,0.14,'bandpass',220,null,0.9,0.26*a);             // basınç darbesi
+      steam(tt,0.012,0.025,body,'bandpass',700,520,0.55,0.55*a);          // "çuf" gövdesi
+      steam(tt+0.005,0.02,0.02,body*1.1,'highpass',1700,1100,0.5,0.42*a);  // buhar tıslaması
+      steam(tt,0.006,0.0,0.12,'bandpass',200,null,0.9,0.28*a);             // basınç darbesi
       t+=period;
     }
     const end=t;
     /* 3. Çuflar arasında hiç kesilmeyen ince buhar sızıntısı */
-    steam(t0+1.1,0.8,end-t0-2.2,0.8,'highpass',2200,null,0.5,0.035);
+    steam(t0+1.1,0.8,end-t0-2.2,0.8,'highpass',2200,null,0.5,0.06);
     /* 4. Ray tıkırtısı "taka-tuk" (hafif) */
     let r=t0+3.2;
     while(r<end-0.4){
       const k=(r-t0)/(end-t0);
-      [0,0.1].forEach(d=>steam(r+d,0.004,0,0.05,'bandpass',1800,null,4,0.08));
+      [0,0.1].forEach(d=>steam(r+d,0.002,0,0.05,'bandpass',2400,null,5,0.14));
       r+=1.2-0.55*k;
     }
     /* 5. Sönümlenme */
-    master.gain.setValueAtTime(1.18,end-0.7);
+    master.gain.setValueAtTime(1,end-0.7);
     master.gain.linearRampToValueAtTime(0.0001,end+0.4);
     return (end-c.currentTime)*1000+700;
   },
@@ -666,8 +665,9 @@ const SFX={
     const hg=c.createGain();hg.gain.setValueAtTime(0.0001,th);hg.gain.exponentialRampToValueAtTime(0.35,th+0.04);hg.gain.exponentialRampToValueAtTime(0.0001,th+0.55);
     h.connect(hf);hf.connect(hg);hg.connect(M);h.start(th,Math.random());h.stop(th+0.6);
     return (D+0.6)*1000;},
-  /* ÖNCEKİ çuf çuf (Faz 3.0-3.2), karşılaştırma için: pşşş + pürüzlü buhar çufları + sürekli buhar + yankı */
-  cufcufEski(){
+  /* Çuf çuf v4 (yeni deneme): v2'nin pşşş'ı, yankısı ve ray sesi + 'çuf-ça' çiftleri,
+     silindir darbesi ve biyel tıkırtısı */
+  cufcufYeni(){
     const c=getCtx(),sr=c.sampleRate,t0=c.currentTime+0.05;
     /* Pürüzlü buhar gürültüsü: beyaz gürültü, 15-40 Hz'lik rastgele dalgalanmayla modüle edilir (türbülans) */
     const len=Math.floor(sr*4),rough=c.createBuffer(1,len,sr),rd=rough.getChannelData(0);
@@ -702,18 +702,34 @@ const SFX={
     /* 1. Kalkış: buhar fışkırması "pşşşş" (beğenilen kısım, aynen korundu) */
     steam(t0,0.06,0.1,1.0,'highpass',2500,1200,0.5,0.35);
     steam(t0,0.04,0.05,0.85,'bandpass',900,400,0.6,0.25);
-    /* 2. Çuflar: her biri küçük bir pşşş. Yavaştan hızlıya, 4'lü vurgu */
-    const n=16,accent=[1,0.72,0.88,0.66];
+    /* 2. "Çuf-ça" çiftleri: güçlü "çuf" (koyu ünlü, silindir darbesi) +
+       zayıf "ça" (açık ünlü). Ünlü gibi duyulması için iki rezonans bandı. */
+    function thump(t,a){const o=c.createOscillator();o.type='sine';
+      o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(90,t+0.1);
+      const g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(a,t+0.006);g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
+      o.connect(g);g.connect(bus);o.start(t);o.stop(t+0.13);}
+    function clank(t,a){[2900,4150].forEach((f,j)=>{const o=c.createOscillator();o.frequency.value=f;const g=c.createGain();
+      g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(a*(j?0.6:1),t+0.002);g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+      o.connect(g);g.connect(bus);o.start(t);o.stop(t+0.06);});}
+    const n=20;
     let t=t0+1.15;
     for(let i=0;i<n;i++){
       const k=i/(n-1);
-      const period=0.9-0.66*Math.pow(k,0.6);      // 0.9 sn'den 0.24 sn'ye
-      const a=accent[i%4]*(0.88+Math.random()*0.24);
-      const body=Math.min(0.75,period*0.8);
-      const tt=t+(Math.random()-0.5)*0.02;
-      steam(tt,0.012,0.025,body,'bandpass',700,520,0.55,0.55*a);          // "çuf" gövdesi
-      steam(tt+0.005,0.02,0.02,body*1.1,'highpass',1700,1100,0.5,0.42*a);  // buhar tıslaması
-      steam(tt,0.006,0.0,0.12,'bandpass',200,null,0.9,0.28*a);             // basınç darbesi
+      const period=0.8-0.57*Math.pow(k,0.6);      // 0.8 sn'den 0.23 sn'ye
+      const strong=i%2===0;
+      const a=(strong?1:0.62)*(0.9+Math.random()*0.2);
+      const body=Math.min(0.55,period*0.8);
+      const tt=t+(Math.random()-0.5)*0.015;
+      if(strong){
+        steam(tt,0.008,0.02,body,'bandpass',480,380,3,1.6*a);
+        steam(tt,0.008,0.02,body*0.8,'bandpass',1300,1000,3,0.8*a);
+        thump(tt,0.35*a);
+      }else{
+        steam(tt,0.008,0.015,body*0.8,'bandpass',760,600,3,1.3*a);
+        steam(tt,0.008,0.015,body*0.7,'bandpass',2100,1700,3,0.6*a);
+      }
+      steam(tt+0.01,0.02,0.01,body*0.9,'highpass',3000,2000,0.5,0.1*a);
+      if(strong&&i>2)clank(tt+period*0.5,0.04);
       t+=period;
     }
     const end=t;
@@ -732,7 +748,52 @@ const SFX={
     return (end-c.currentTime)*1000+700;
   }
 };
-function sfx(name){const ms=SFX[name]();return new Promise(r=>setTimeout(r,ms));}
+/* ---------- Gerçek ses dosyaları (isteğe bağlı) ----------
+   GitHub'a "ses-ANAHTAR.mp3" (ya da .wav) adlı bir dosya yüklenirse
+   oyun o efekt için sentetik ses yerine gerçek kaydı çalar.
+   Örnek: ses-motor.mp3, ses-metrofren.mp3, ses-cufcuf.mp3 */
+const FILEBUF={},FILEOPT={};
+try{Object.assign(FILEOPT,JSON.parse(localStorage.getItem('sy_fileopt')||'{}'));}catch(e){}
+function saveFileOpt(){try{localStorage.setItem('sy_fileopt',JSON.stringify(FILEOPT));}catch(e){}}
+const FILE_MAX={motor:4.5,metrofren:3.5,cufcuf:8,fren:1.5,korna:1.5};
+async function loadSfxFiles(){
+  const c=getCtx();
+  await Promise.all(Object.keys(SFX).map(async k=>{
+    for(const ext of ['mp3','wav']){
+      try{
+        const r=await fetch('ses-'+k+'.'+ext,{cache:'no-cache'});if(!r.ok)continue;
+        const b=await c.decodeAudioData(await r.arrayBuffer());
+        let pk=0;const d=b.getChannelData(0);for(let i=0;i<d.length;i+=2){const a=Math.abs(d[i]);if(a>pk)pk=a;}
+        FILEBUF[k]={buf:b,gain:pk>0?Math.min(4,0.6/pk):1,name:'ses-'+k+'.'+ext};
+        log('Gerçek kayıt yüklendi: '+FILEBUF[k].name+' ('+b.duration.toFixed(1)+' sn)');
+        return;
+      }catch(e){}
+    }
+  }));
+  renderLab();
+}
+/* Metro freninin sonundaki havalı fren "pşşt" (beğenilen ses) */
+function pssst(th){
+  const c=getCtx(),M=c.createGain();M.gain.value=0.4;M.connect(c.destination);
+  const h=c.createBufferSource();h.buffer=noiseBuffer(1);
+  const hf=c.createBiquadFilter();hf.type='highpass';hf.frequency.value=2500;
+  const hg=c.createGain();hg.gain.setValueAtTime(0.0001,th);hg.gain.exponentialRampToValueAtTime(0.35,th+0.04);hg.gain.exponentialRampToValueAtTime(0.0001,th+0.55);
+  h.connect(hf);hf.connect(hg);hg.connect(M);h.start(th);h.stop(th+0.6);
+}
+function playFile(k){
+  const c=getCtx(),f=FILEBUF[k],o=FILEOPT[k]||{},dur=f.buf.duration;
+  const start=Math.min(o.start||0,Math.max(0,dur-0.5));
+  const len=Math.max(0.3,Math.min(o.len||FILE_MAX[k]||6,dur-start));
+  const t=c.currentTime+0.02,s=c.createBufferSource();s.buffer=f.buf;
+  const g=c.createGain();
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(f.gain,t+0.03);
+  g.gain.setValueAtTime(f.gain,t+Math.max(0.05,len-0.4));g.gain.exponentialRampToValueAtTime(0.0001,t+len);
+  s.connect(g);g.connect(c.destination);s.start(t,start);s.stop(t+len+0.05);
+  let ms=len*1000+100;
+  if(k==='metrofren'){pssst(t+len-0.15);ms+=500;}
+  return ms;
+}
+function sfx(name){const ms=FILEBUF[name]?playFile(name):SFX[name]();return new Promise(r=>setTimeout(r,ms));}
 
 /* ---------- Konuşma tanıma ---------- */
 function recognizeOnce(timeoutMs){
@@ -1374,7 +1435,7 @@ $('pitch').oninput=e=>{VS.pitch=+e.target.value;saveVS();renderSliders();};
 $('btnVoice').onclick=()=>say('Merhaba küçük makinist! Ben Düdük, çuf çuf tren. Bugün hayvan arkadaşlarımızı alıp pikniğe gideceğiz.');
 /* ---------- Ses laboratuvarı ---------- */
 const SFX_NAMES={duduk:'Tren düdüğü',cufcuf:'Çuf çuf (buharlı tren)',hizli:'Hızlı tren geçişi',fren:'Araba freni (lastik cıyaklaması)',kapi:'Metro kapısı',
-  korna:'Araba kornası',motor:'Araba motoru',roket:'Roket',bipbip:'Uzay bilgisayarı bip bip',ding:'Ödül sesi',metrofren:'Metro freni',cufcufEski:'Çuf çuf (önceki sürüm)'};
+  korna:'Araba kornası',motor:'Araba motoru',roket:'Roket',bipbip:'Uzay bilgisayarı bip bip',ding:'Ödül sesi',metrofren:'Metro freni',cufcufYeni:'Çuf çuf (yeni deneme)'};
 function sfxUsage(){
   const u={};
   STORIES.forEach(s=>Object.values(s.scenes).forEach(sc=>sc.forEach(n=>{if(n.t==='sfx'){u[n.s]=u[n.s]||new Set();u[n.s].add(s.title);}})));
@@ -1385,10 +1446,16 @@ function renderLab(){
   Object.keys(SFX).forEach(k=>{
     i++;
     const where=k==='ding'?'Her hikayede, doğru cevaptan sonra':(u[k]?[...u[k]].join(', '):'Hikayede çalmıyor, sadece karşılaştırma için');
-    h+='<div class="story"><div class="ic" style="font-size:22px;color:var(--orange);font-weight:700">'+i+'</div><div class="tx"><b>'+(SFX_NAMES[k]||k)+'</b><span>'+where+'</span></div><button class="ghost" data-s="'+k+'">▶</button></div>';
+    const F=FILEBUF[k];
+    h+='<div class="story"'+(F?' style="margin-bottom:2px;border-color:var(--orange)"':'')+'><div class="ic" style="font-size:22px;color:var(--orange);font-weight:700">'+i+'</div><div class="tx"><b>'+(SFX_NAMES[k]||k)+'</b><span>'+where+(F?'<br>🎵 Gerçek kayıt: '+F.name:'')+'</span></div><button class="ghost" data-s="'+k+'">▶</button></div>';
+    if(F){const o=FILEOPT[k]||{},D=F.buf.duration,L=o.len||Math.min(FILE_MAX[k]||6,D);
+      h+='<div class="small" style="margin:0 0 12px 8px">Başlangıç: <b id="fs_'+k+'">'+(o.start||0).toFixed(1)+'</b> sn <input type="range" min="0" max="'+Math.max(0,D-0.5).toFixed(1)+'" step="0.1" value="'+(o.start||0)+'" data-fk="'+k+'" data-fp="start">'+
+        'Süre: <b id="fl_'+k+'">'+L.toFixed(1)+'</b> sn <input type="range" min="0.5" max="'+Math.min(10,D).toFixed(1)+'" step="0.1" value="'+L+'" data-fk="'+k+'" data-fp="len"></div>';}
   });
   $('sfxList').innerHTML=h;
   $('sfxList').querySelectorAll('button[data-s]').forEach(b=>b.onclick=()=>{getCtx();sfx(b.dataset.s);});
+  $('sfxList').querySelectorAll('input[data-fk]').forEach(r=>r.oninput=()=>{const k=r.dataset.fk;FILEOPT[k]=FILEOPT[k]||{};FILEOPT[k][r.dataset.fp]=+r.value;saveFileOpt();
+    $((r.dataset.fp==='start'?'fs_':'fl_')+k).textContent=(+r.value).toFixed(1);});
   const fx=[['normal','Normal'],['dev','Dev'],['sincap','Sincap'],['robot','Robot'],['tunel','Tünel'],['koro','Koro']];
   $('labFx').innerHTML=fx.map(f=>'<button class="ghost" style="margin:3px" data-f="'+f[0]+'" disabled>'+f[1]+'</button>').join('');
   $('labFx').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(last&&last.buf)playVoice(last.buf,last.gain,b.dataset.f);});
@@ -1418,7 +1485,8 @@ renderVoices();
 renderList();
 renderLab();
 showSupport();
-log('Sayfa hazır (Faz 3.3)');
+log('Sayfa hazır (Faz 3.4)');
+loadSfxFiles();
 </script>
 </body>
 </html>
