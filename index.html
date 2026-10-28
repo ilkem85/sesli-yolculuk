@@ -438,6 +438,7 @@ function playVoiceNewBase(buf,gainVal,effect){
   });
 }
 function playVoiceNew(buf,gainVal,effect){
+  if(effect==='tunel')return playVoiceOldBase(buf,gainVal,'tunel');   // kullanıcı tercihi: Faz 3.0 tüneli
   if(effect!=='koro')return playVoiceNewBase(buf,gainVal,effect);
   /* Koro: çocuğun kendi sesi önde ve net, kalın/ince sesler arkada fısıltı gibi */
   const d=(ms,fn)=>new Promise(r=>setTimeout(()=>fn().then(r),ms));
@@ -532,9 +533,25 @@ const SFX={
     master.gain.linearRampToValueAtTime(0.0001,end+0.4);
     return (end-c.currentTime)*1000+700;
   },
-  korna(){const c=getCtx(),t0=c.currentTime;
-    [0,0.35].forEach(dt=>{const g=c.createGain();env(g,t0+dt,0.01,0.2,0.05,0.12);g.connect(c.destination);
-      [400,500].forEach(fr=>{const o=c.createOscillator();o.type='square';o.frequency.value=fr;o.connect(g);o.start(t0+dt);o.stop(t0+dt+0.3);});});return 800;},
+  /* Araba kornası: iki korna diski (yaklaşık 415 ve 523 Hz, büyük üçlü),
+     zengin harmonikler + hafif distorsiyon + metalik rezonans. "Bip... biiip" */
+  korna(){const c=getCtx(),t0=c.currentTime+0.02;
+    const shaper=c.createWaveShaper(),cv=new Float32Array(1024);
+    for(let i=0;i<1024;i++){const x=i/511.5-1;cv[i]=Math.tanh(2.5*x);}shaper.curve=cv;
+    const pk=c.createBiquadFilter();pk.type='peaking';pk.frequency.value=1800;pk.Q.value=1.2;pk.gain.value=8;
+    const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=4500;
+    const out=c.createGain();out.gain.value=0.2;
+    shaper.connect(pk);pk.connect(lp);lp.connect(out);out.connect(c.destination);
+    [[0,0.18],[0.28,0.45]].forEach(([dt,len])=>{
+      const t=t0+dt,g=c.createGain();
+      g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.5,t+0.015);
+      g.gain.setValueAtTime(0.5,t+len-0.03);g.gain.exponentialRampToValueAtTime(0.0001,t+len);
+      g.connect(shaper);
+      [415,523].forEach(f=>{const o=c.createOscillator();o.type='sawtooth';
+        o.frequency.setValueAtTime(f*0.97,t);o.frequency.exponentialRampToValueAtTime(f,t+0.03);
+        o.connect(g);o.start(t);o.stop(t+len+0.02);});
+    });
+    return 850;},
   roket(){const c=getCtx(),t=c.currentTime,s=c.createBufferSource();s.buffer=noiseBuffer(3);
     const f=c.createBiquadFilter();f.type='lowpass';f.frequency.setValueAtTime(200,t);f.frequency.exponentialRampToValueAtTime(3000,t+2.5);
     const g=c.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.7,t+1.8);g.gain.linearRampToValueAtTime(0,t+3);
@@ -563,31 +580,77 @@ const SFX={
     const o=c.createOscillator();o.type='sine';o.frequency.setValueAtTime(120,th+0.6);o.frequency.exponentialRampToValueAtTime(50,th+0.8);
     const g2=c.createGain();env(g2,th+0.6,0.005,0.02,0.15,0.4);o.connect(g2);g2.connect(c.destination);o.start(th+0.6);o.stop(th+0.85);
     return 1900;},
-  /* Fren gıcırtısı */
-  fren(){const c=getCtx(),t=c.currentTime,D=1.5;
-    const o=c.createOscillator();o.type='triangle';o.frequency.setValueAtTime(2600,t);o.frequency.linearRampToValueAtTime(2100,t+D);
-    const lfo=c.createOscillator();lfo.frequency.value=18;const lg=c.createGain();lg.gain.value=60;lfo.connect(lg);lg.connect(o.frequency);
-    const g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.12,t+0.15);g.gain.setValueAtTime(0.12,t+D-0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+D);
-    o.connect(g);g.connect(c.destination);o.start(t);lfo.start(t);o.stop(t+D);lfo.stop(t+D);
-    const s=c.createBufferSource();s.buffer=noiseBuffer(2);const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=3000;f.Q.value=2;
-    const ng=c.createGain();ng.gain.setValueAtTime(0.0001,t);ng.gain.exponentialRampToValueAtTime(0.15,t+0.1);ng.gain.exponentialRampToValueAtTime(0.0001,t+D);
-    s.connect(f);f.connect(ng);ng.connect(c.destination);s.start(t);s.stop(t+D);
-    return D*1000+100;},
-  /* Araba motoru: marş + rölanti + gaz verme */
-  motor(){const c=getCtx(),t=c.currentTime,nb=noiseBuffer(1);
-    for(let i=0;i<5;i++){const s=c.createBufferSource();s.buffer=nb;const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=700;f.Q.value=1;
-      const g=c.createGain();const tt=t+i*0.11;env(g,tt,0.005,0.02,0.05,0.4);s.connect(f);f.connect(g);g.connect(c.destination);s.start(tt,Math.random()*0.5);s.stop(tt+0.1);}
-    const t1=t+0.6,D=2.4;
-    const o=c.createOscillator();o.type='sawtooth';
-    o.frequency.setValueAtTime(40,t1);o.frequency.linearRampToValueAtTime(55,t1+0.3);o.frequency.linearRampToValueAtTime(95,t1+1.1);o.frequency.linearRampToValueAtTime(50,t1+1.9);
-    const o2=c.createOscillator();o2.type='square';
-    o2.frequency.setValueAtTime(20,t1);o2.frequency.linearRampToValueAtTime(27,t1+0.3);o2.frequency.linearRampToValueAtTime(47,t1+1.1);o2.frequency.linearRampToValueAtTime(25,t1+1.9);
-    const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.setValueAtTime(400,t1);lp.frequency.linearRampToValueAtTime(1200,t1+1.1);lp.frequency.linearRampToValueAtTime(450,t1+1.9);
-    const am=c.createGain();am.gain.value=0.5;const amd=c.createGain();amd.gain.value=0.5;o2.connect(amd);amd.connect(am.gain);
-    const g=c.createGain();g.gain.setValueAtTime(0.0001,t1);g.gain.exponentialRampToValueAtTime(0.35,t1+0.15);g.gain.setValueAtTime(0.35,t1+D-0.4);g.gain.exponentialRampToValueAtTime(0.0001,t1+D);
-    o.connect(lp);lp.connect(am);am.connect(g);g.connect(c.destination);
-    o.start(t1);o2.start(t1);o.stop(t1+D);o2.stop(t1+D);
-    return (t1-t+D)*1000+100;},
+  /* Araba freni: lastik cıyaklaması "cıyyyt". Dar bantlı sürtünme gürültüsü +
+     titreyen ton + düşen perde + azalan yol uğultusu */
+  fren(){const c=getCtx(),t=c.currentTime+0.02,D=1.1,nb=noiseBuffer(2);
+    const s=c.createBufferSource();s.buffer=nb;
+    const bp1=c.createBiquadFilter();bp1.type='bandpass';bp1.Q.value=18;
+    bp1.frequency.setValueAtTime(1500,t);bp1.frequency.linearRampToValueAtTime(1150,t+D);
+    const bp2=c.createBiquadFilter();bp2.type='bandpass';bp2.Q.value=18;
+    bp2.frequency.setValueAtTime(3000,t);bp2.frequency.linearRampToValueAtTime(2300,t+D);
+    const b2g=c.createGain();b2g.gain.value=0.5;
+    const am=c.createGain();am.gain.value=0.7;
+    const lfo=c.createOscillator();lfo.type='triangle';lfo.frequency.setValueAtTime(38,t);lfo.frequency.linearRampToValueAtTime(22,t+D);
+    const lg=c.createGain();lg.gain.value=0.3;lfo.connect(lg);lg.connect(am.gain);
+    const g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(3.2,t+0.06);
+    g.gain.setValueAtTime(3.2,t+D*0.7);g.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    s.connect(bp1);s.connect(bp2);bp2.connect(b2g);bp1.connect(am);b2g.connect(am);am.connect(g);g.connect(c.destination);
+    const o=c.createOscillator();o.frequency.setValueAtTime(1500,t);o.frequency.linearRampToValueAtTime(1150,t+D);
+    const vib=c.createOscillator();vib.frequency.value=9;const vg=c.createGain();vg.gain.value=25;vib.connect(vg);vg.connect(o.frequency);
+    const og=c.createGain();og.gain.setValueAtTime(0.0001,t);og.gain.exponentialRampToValueAtTime(0.07,t+0.06);
+    og.gain.setValueAtTime(0.07,t+D*0.7);og.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    o.connect(og);og.connect(c.destination);
+    const r=c.createBufferSource();r.buffer=nb;
+    const rl=c.createBiquadFilter();rl.type='lowpass';rl.frequency.setValueAtTime(900,t);rl.frequency.linearRampToValueAtTime(300,t+D);
+    const rg=c.createGain();rg.gain.setValueAtTime(0.0001,t);rg.gain.exponentialRampToValueAtTime(0.25,t+0.05);rg.gain.exponentialRampToValueAtTime(0.0001,t+D+0.1);
+    r.connect(rl);rl.connect(rg);rg.connect(c.destination);
+    s.start(t,Math.random());r.start(t,Math.random());s.stop(t+D+0.15);r.stop(t+D+0.15);
+    o.start(t);vib.start(t);lfo.start(t);o.stop(t+D);vib.stop(t+D);lfo.stop(t+D);
+    return (D+0.2)*1000;},
+  /* Araba motoru: gerçek motor gibi tek tek ateşleme darbeleri.
+     Marş "rrr-rrr" → motor yakalar → rölanti → gaz "vrınnn" → rölanti */
+  motor(){const c=getCtx(),sr=c.sampleRate,t0=c.currentTime+0.02;
+    const pl=Math.floor(sr*0.07),pop=c.createBuffer(1,pl,sr),pd=pop.getChannelData(0);
+    let lpv=0;
+    for(let i=0;i<pl;i++){const tt=i/sr;lpv+=((Math.random()*2-1)-lpv)*0.15;
+      pd[i]=0.65*Math.sin(2*Math.PI*70*tt)*Math.exp(-tt*40)+0.9*lpv*Math.exp(-tt*65);}
+    const bus=c.createBiquadFilter();bus.type='lowpass';bus.Q.value=0.9;
+    const comp=c.createDynamicsCompressor();comp.threshold.value=-18;comp.ratio.value=4;
+    const master=c.createGain();master.gain.value=0.85;
+    bus.connect(comp);comp.connect(master);master.connect(c.destination);
+    function fire(t,gain,rate){const s=c.createBufferSource();s.buffer=pop;s.playbackRate.value=rate;
+      const g=c.createGain();g.gain.value=gain;s.connect(g);g.connect(bus);s.start(t);s.stop(t+0.08);}
+    /* 1. Marş motoru */
+    const crankD=0.85;
+    const wh=c.createOscillator();wh.type='sawtooth';wh.frequency.setValueAtTime(140,t0);wh.frequency.linearRampToValueAtTime(170,t0+crankD);
+    const whf=c.createBiquadFilter();whf.type='bandpass';whf.frequency.value=600;whf.Q.value=1;
+    const whg=c.createGain();whg.gain.value=0.09;
+    const am=c.createOscillator();am.frequency.value=7;const amg=c.createGain();amg.gain.value=0.07;am.connect(amg);amg.connect(whg.gain);
+    const we=c.createGain();we.gain.setValueAtTime(0.0001,t0);we.gain.exponentialRampToValueAtTime(1,t0+0.05);
+    we.gain.setValueAtTime(1,t0+crankD-0.05);we.gain.exponentialRampToValueAtTime(0.0001,t0+crankD+0.1);
+    wh.connect(whf);whf.connect(whg);whg.connect(we);we.connect(c.destination);
+    wh.start(t0);am.start(t0);wh.stop(t0+crankD+0.15);am.stop(t0+crankD+0.15);
+    for(let tt=t0+0.05;tt<t0+crankD;tt+=1/7)fire(tt,0.35,0.8);
+    /* 2. Motor çalışıyor: ateşleme sıklığı (Hz) zamana göre */
+    const ts=t0+crankD;
+    const prof=[[0,18],[0.2,30],[0.6,28],[1.1,78],[1.35,78],[1.9,30],[2.6,28]];
+    const rate=x=>{for(let i=1;i<prof.length;i++)if(x<=prof[i][0]){const a=prof[i-1],b=prof[i],k=(x-a[0])/(b[0]-a[0]);return a[1]+(b[1]-a[1])*k;}return prof[prof.length-1][1];};
+    const runD=2.6;
+    prof.forEach(([x,f])=>bus.frequency.linearRampToValueAtTime(350+f*22,ts+x));
+    bus.frequency.setValueAtTime(350+18*22,t0);
+    master.gain.setValueAtTime(0.85,ts+runD-0.5);master.gain.linearRampToValueAtTime(0.0001,ts+runD);
+    let tt=ts,k=0;
+    while(tt<ts+runD){const f=rate(tt-ts);
+      const uneven=(tt-ts<0.2)?(Math.random()*0.35):0;
+      fire(tt,(0.6+Math.random()*0.25)*(k%2?0.85:1),0.85+f/160);
+      tt+=(1/f)*(1+(Math.random()-0.5)*0.06+uneven);k++;}
+    /* egzoz uğultusu */
+    const ex=c.createBufferSource();ex.buffer=noiseBuffer(3);
+    const exf=c.createBiquadFilter();exf.type='lowpass';exf.frequency.value=220;
+    const exg=c.createGain();exg.gain.setValueAtTime(0.0001,ts);exg.gain.exponentialRampToValueAtTime(0.3,ts+0.2);
+    exg.gain.setValueAtTime(0.3,ts+runD-0.5);exg.gain.exponentialRampToValueAtTime(0.0001,ts+runD);
+    ex.connect(exf);exf.connect(exg);exg.connect(c.destination);ex.start(ts);ex.stop(ts+runD+0.05);
+    return (crankD+runD)*1000+150;},
   /* Uzay bilgisayarı bip bip */
   bipbip(){const c=getCtx(),t=c.currentTime,notes=[880,1047,1175,1319,1568,1760];
     for(let i=0;i<8;i++){const o=c.createOscillator();o.type=i%3?'sine':'square';o.frequency.value=notes[Math.floor(Math.random()*notes.length)];
@@ -596,7 +659,31 @@ const SFX={
   ding(){const c=getCtx(),t=c.currentTime;
     [784,988,1319].forEach((fr,i)=>{const o=c.createOscillator();o.type='sine';o.frequency.value=fr;
       const g=c.createGain();env(g,t+i*0.12,0.01,0.05,0.35,0.25);o.connect(g);g.connect(c.destination);
-      o.start(t+i*0.12);o.stop(t+i*0.12+0.5);});return 800;}
+      o.start(t+i*0.12);o.stop(t+i*0.12+0.5);});return 800;},
+  /* Metro freni: yavaşlayan tekerlek uğultusu + seyrekleşen ray tak-takları +
+     titreyen metal gıcırtısı + duruşta havalı fren "pşşt" */
+  metrofren(){const c=getCtx(),t=c.currentTime+0.02,D=2.0,nb=noiseBuffer(3);
+    const M=c.createGain();M.gain.value=0.4;M.connect(c.destination);
+    const r=c.createBufferSource();r.buffer=nb;
+    const rl=c.createBiquadFilter();rl.type='lowpass';rl.frequency.setValueAtTime(700,t);rl.frequency.exponentialRampToValueAtTime(150,t+D);
+    const rg=c.createGain();rg.gain.setValueAtTime(0.5,t);rg.gain.exponentialRampToValueAtTime(0.0001,t+D);
+    r.connect(rl);rl.connect(rg);rg.connect(M);r.start(t,Math.random());r.stop(t+D);
+    let k=t+0.1,gap=0.12;
+    while(k<t+D-0.35){[0,0.07].forEach(d=>{const s=c.createBufferSource();s.buffer=nb;
+      const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=1200;f.Q.value=3;
+      const g=c.createGain();env(g,k+d,0.002,0.005,0.05,0.4);s.connect(f);f.connect(g);g.connect(M);
+      s.start(k+d,Math.random()*2);s.stop(k+d+0.08);});k+=gap;gap*=1.35;}
+    const sq=c.createGain();sq.gain.setValueAtTime(0.0001,t+0.2);sq.gain.exponentialRampToValueAtTime(0.06,t+0.5);
+    sq.gain.setValueAtTime(0.06,t+D-0.5);sq.gain.exponentialRampToValueAtTime(0.0001,t+D-0.15);sq.connect(M);
+    [[3150,1],[4720,0.4],[6300,0.2]].forEach(([f,a])=>{const o=c.createOscillator();
+      o.frequency.setValueAtTime(f,t);o.frequency.linearRampToValueAtTime(f*0.93,t+D);
+      const v=c.createOscillator();v.frequency.value=6+Math.random()*3;const vg=c.createGain();vg.gain.value=f*0.006;v.connect(vg);vg.connect(o.frequency);
+      const og=c.createGain();og.gain.value=a;o.connect(og);og.connect(sq);o.start(t);v.start(t);o.stop(t+D);v.stop(t+D);});
+    const th=t+D-0.1,h=c.createBufferSource();h.buffer=nb;
+    const hf=c.createBiquadFilter();hf.type='highpass';hf.frequency.value=2500;
+    const hg=c.createGain();hg.gain.setValueAtTime(0.0001,th);hg.gain.exponentialRampToValueAtTime(0.35,th+0.04);hg.gain.exponentialRampToValueAtTime(0.0001,th+0.55);
+    h.connect(hf);hf.connect(hg);hg.connect(M);h.start(th,Math.random());h.stop(th+0.6);
+    return (D+0.6)*1000;}
 };
 function sfx(name){const ms=SFX[name]();return new Promise(r=>setTimeout(r,ms));}
 
@@ -935,14 +1022,14 @@ STORIES.push({
     {t:'task',x:'Turnikeye söyle: bip!',h:'bip',fx:'robot',a:'Bip! Turnike açıldı.'},
     {t:'say',x:'Merdivenden aşağı iniyoruz.'},
     {t:'task',x:'Benimle say: bir, iki, üç!',h:'bir ... i... ki ... üç',fx:'koro',a:'Aşağı indik!'},
-    {t:'sfx',s:'fren'},
+    {t:'sfx',s:'metrofren'},
     {t:'say',x:'Metro geldi. Kapılar açılıyor.'},
     {t:'sfx',s:'kapi'},
     {t:'task',x:'Binmek için söyle: bin!',h:'bin',fx:'normal',a:'Bindik! Kapılar kapanıyor.'},
     {t:'sfx',s:'hizli'},
     {t:'say',x:'Anons var. Sıradaki durak: Hayvanat Bahçesi!'},
     {t:'task',x:'Anonsçu gibi söyle: durak!',h:'du... rak',fx:'robot',a:'Tam bir anonsçu gibi!'},
-    {t:'sfx',s:'fren'},
+    {t:'sfx',s:'metrofren'},
     {t:'sfx',s:'kapi'},
     {t:'say',x:'Kapı açıldı. Biri koşarak bindi. Ağaçtan ağaca atlayan biri...'},
     {t:'task',x:'Maymun gibi söyle: u u a a!',h:'u ... u ... a ... a',fx:'sincap',a:'Maymun seninle dans ediyor!'},
@@ -965,7 +1052,7 @@ STORIES.push({
     {t:'say',x:'Metro hızlandı. Karanlık tünellerden geçiyoruz.'},
     {t:'task',x:'Metro gibi ses çıkar: vuuu!',h:'vuuu',fx:'tunel',a:'Vuuu... Tünel yankılandı!'},
     {t:'say',x:'Sıradaki durak: Deniz Kenarı.'},
-    {t:'sfx',s:'fren'},
+    {t:'sfx',s:'metrofren'},
     {t:'sfx',s:'kapi'},
     {t:'say',x:'Biri yan yan yürüyerek bindi. Tık tık tık...'},
     {t:'task',x:'Onun gibi söyle: tık tık!',h:'tık ... tık',fx:'sincap',a:'Kıskaçlarını şaklattı!'},
@@ -1002,7 +1089,7 @@ STORIES.push({
     {t:'sfx',s:'hizli'},
     {t:'task',x:'Herkes bağırsın: yaşasın!',h:'ya... şa... sın',fx:'koro',a:'Maymun, yengeç ve köstebek seninle sevindi!'},
     {t:'say',x:'Son durak: Ev!'},
-    {t:'sfx',s:'fren'},
+    {t:'sfx',s:'metrofren'},
     {t:'task',x:'Yolculara söyle: hoşça kalın!',h:'hoş... ça ... ka... lın',fx:'koro',a:'Herkes sana el salladı!'},
     {t:'task',x:'Bana da söyle: teşekkürler Minik!',h:'te... şek... kür... ler ... mi... nik',fx:'robot',a:'Rica ederim! Sırrımızı kimseye söyleme, tamam mı?'}
   ]
@@ -1239,8 +1326,8 @@ $('rate').oninput=e=>{VS.rate=+e.target.value;saveVS();renderSliders();};
 $('pitch').oninput=e=>{VS.pitch=+e.target.value;saveVS();renderSliders();};
 $('btnVoice').onclick=()=>say('Merhaba küçük makinist! Ben Düdük, çuf çuf tren. Bugün hayvan arkadaşlarımızı alıp pikniğe gideceğiz.');
 /* ---------- Ses laboratuvarı ---------- */
-const SFX_NAMES={duduk:'Tren düdüğü',cufcuf:'Çuf çuf (buharlı tren)',hizli:'Hızlı tren geçişi',fren:'Fren gıcırtısı',kapi:'Metro kapısı',
-  korna:'Araba kornası',motor:'Araba motoru',roket:'Roket',bipbip:'Uzay bilgisayarı bip bip',ding:'Ödül sesi'};
+const SFX_NAMES={duduk:'Tren düdüğü',cufcuf:'Çuf çuf (buharlı tren)',hizli:'Hızlı tren geçişi',fren:'Araba freni (lastik cıyaklaması)',kapi:'Metro kapısı',
+  korna:'Araba kornası',motor:'Araba motoru',roket:'Roket',bipbip:'Uzay bilgisayarı bip bip',ding:'Ödül sesi',metrofren:'Metro freni'};
 function sfxUsage(){
   const u={};
   STORIES.forEach(s=>Object.values(s.scenes).forEach(sc=>sc.forEach(n=>{if(n.t==='sfx'){u[n.s]=u[n.s]||new Set();u[n.s].add(s.title);}})));
@@ -1284,7 +1371,7 @@ renderVoices();
 renderList();
 renderLab();
 showSupport();
-log('Sayfa hazır (Faz 3.1)');
+log('Sayfa hazır (Faz 3.2)');
 </script>
 </body>
 </html>
