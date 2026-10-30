@@ -90,6 +90,7 @@ details summary{cursor:pointer;color:var(--blue);font-size:14px}
 <div class="card">
   <h2>Ses laboratuvarı</h2>
   <p><b>Efekt sesleri:</b> Her birini dinle, beğenmediklerinin numarasını söyle.</p>
+  <p class="small"><a href="telaffuz.html" style="color:var(--blue);font-weight:700">Telaffuz Defteri</a>: anlatıcının yanlış okuduğu kelimeleri bul ve düzelt.</p>
   <p class="small">Gerçek kayıt kullanmak için GitHub'a <b>ses-motor.mp3</b>, <b>ses-metrofren.mp3</b> gibi dosya yükle. Yüklenen kayıt turuncu çerçeveyle görünür, başlangıç saniyesi ve süresi buradan ayarlanır.</p>
   <div id="sfxList"></div>
   <p style="margin-top:14px"><b>Ses değiştirici denemesi:</b> Kaydet'e bas, anlatıcı "söyle" deyince <b>hemen</b> bir kelime söyle. Sonra efektleri tek tek dinle.</p>
@@ -137,8 +138,25 @@ function loadVoices(){
   showSupport();
 }
 if('speechSynthesis' in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices;}
+/* ---------- Telaffuz sözlüğü ----------
+   Anlatıcı okumadan önce kelimeler doğru okunacak yazımla değiştirilir.
+   PRON_BASE: kalıcı düzeltmeler (koda gömülü).
+   sy_pron: telaffuz.html sayfasında yapılan düzeltmeler (aynı sitede, anında geçerli). */
+const PRON_BASE={};
+const PRON_L="A-Za-zÇĞİÖŞÜçğıöşüÂâÎîÛû'";
+function pronDict(){
+  const d={};Object.keys(PRON_BASE).forEach(k=>d[k]=PRON_BASE[k]);
+  try{const u=JSON.parse(localStorage.getItem('sy_pron')||'{}');Object.keys(u).forEach(k=>{if(u[k]&&u[k].fix)d[k]=u[k].fix;});}catch(e){}
+  return d;
+}
+function pronKey(tok){return tok.replace(/^'+|'+$/g,'').toLocaleLowerCase('tr-TR');}
+function applyPron(text,dict){
+  dict=dict||pronDict();if(!Object.keys(dict).length)return text;
+  return text.split(new RegExp('(['+PRON_L+']+)')).map(t=>{const k=pronKey(t);return (k&&dict[k]!=null)?dict[k]:t;}).join('');
+}
 function say(text,opt){
   opt=opt||{};
+  text=applyPron(text);
   return new Promise(res=>{
     if(!('speechSynthesis' in window)){log('Anlatıcı sesi yok');return res();}
     speechSynthesis.cancel();
@@ -1841,7 +1859,7 @@ renderVoices();
 renderList();
 renderLab();
 showSupport();
-log('Sayfa hazır (Faz 4.1)');
+log('Sayfa hazır (Faz 4.2)');
 loadSfxFiles();
 </script>
 </body>
