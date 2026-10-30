@@ -1736,6 +1736,160 @@ STORIES.push({
   }
 });
 
+/* ---------------- 11. HARF EKSPRESİ (A-L) ---------------- */
+STORIES.push({
+  id:'harf1', icon:'🔤', title:'Harf Ekspresi (A-L)', desc:'Hızlı trenle A\'dan L\'ye harfler', endSfx:'hizli',
+  ending:'Harf Ekspresi\'nin en iyi kondüktörü sensin!',
+  scenes:{
+  start:[
+    {t:'sfx',s:'anons'},
+    {t:'say',x:'Merhaba şampiyon! Ben Şimşek, hızlı tren. Bugün Harf Ekspresi oldum!'},
+    {t:'say',x:'Her durakta bir harf trene binecek. Harfleri sen çağıracaksın. A harfinden L harfine kadar gideceğiz.'},
+    {t:'task',x:'Hazır mısın? Söyle: hazırım!',h:'ha... zı... rım',fx:'dev',a:'Harika! Kalkıyoruz!'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'İlk durak: A durağı. Burada bir araba bekliyor.'},
+    {t:'task',x:'A harfini çağır. Söyle: a!',h:'aaa',fx:'koro',a:'A trene bindi! A, araba gibi.'},
+    {t:'say',x:'Sıradaki durak: B durağı. Burada bir balık var.'},
+    {t:'task',x:'Söyle: be!',h:'be',fx:'sincap',a:'Be, balık! Balık trene bindi.'},
+    {t:'say',x:'C durağı. Bir civciv cik cik ediyor.'},
+    {t:'task',x:'Söyle: ce!',h:'ce',fx:'sincap',a:'Ce, civciv! Civciv de bindi.'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Şimdi güçlü bir harf geliyor: çe! Tren gibi, çuf çuf diye ses çıkarır.'},
+    {t:'task',x:'Güçlü söyle: çe!',h:'çe... çe',fx:'dev',a:'Ne güçlü bir çe!'},
+    {t:'task',x:'Kelimenin başında: çuf çuf!',h:'çuf... çuf',fx:'dev',a:'Çuf çuf! Tıpkı tren gibi!'},
+    {t:'task',x:'Kelimenin sonunda: ağaç!',h:'a... ğaç',fx:'normal',a:'Ağaç! Sonunda çe saklanıyor.'},
+    {t:'say',x:'D durağı. Burada kocaman bir dinozor var. Raaar!'},
+    {t:'task',x:'Söyle: de!',h:'de',fx:'dev',a:'De, dinozor! Kocaman bir yolcu.'},
+    {t:'say',x:'E durağı. Ağaçta kıpkırmızı bir elma var.'},
+    {t:'task',x:'Söyle: e!',h:'eee',fx:'normal',a:'E, elma! Elma da bindi.'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Güçlü harf geldi: fe! Fren gibi fısss diye hava çıkar.'},
+    {t:'task',x:'Dişlerini dudağına değdir ve üfle: fe!',h:'fe... fe',fx:'tunel',a:'Fısss! Harika bir fe!'},
+    {t:'task',x:'Kelimenin başında: fil!',h:'fil',fx:'dev',a:'Fil bindi, tren biraz ağırlaştı!'},
+    {t:'task',x:'Kafana şapka tak. Söyle: kafa!',h:'ka... fa',fx:'sincap',a:'Şapka kafana tam oturdu!'},
+    {t:'say',x:'G durağı. Limanda bir gemi var.'},
+    {t:'task',x:'Söyle: ge!',h:'ge',fx:'dev',a:'Ge, gemi! Gemi düdük çaldı.'},
+    {t:'say',x:'Şimdi saklambaç seven bir harf: yumuşak ge. Hiçbir kelime onunla başlamaz, hep ortada saklanır.'},
+    {t:'task',x:'Söyle: dağ!',h:'da... ağ',fx:'tunel',a:'Dağ kelimesinde yumuşak ge saklanıyor!'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Güçlü harf: he! Soğukta ellerini ısıtır gibi hah diye üfle.'},
+    {t:'task',x:'Söyle: he!',h:'he... he',fx:'sincap',a:'Hah! Ellerin ısındı!'},
+    {t:'task',x:'Kelimenin başında: hav hav!',h:'hav... hav',fx:'dev',a:'Bir köpek havlayarak trene bindi!'},
+    {t:'task',x:'Kelimenin sonunda: timsah!',h:'tim... sah',fx:'dev',a:'Timsah da bindi, dişlerini gösterdi!'},
+    {t:'say',x:'I durağı. Karanlık olmuş, farlarımızı yakalım.'},
+    {t:'task',x:'Söyle: ı!',h:'ııı',fx:'tunel',a:'I, ışık! Farlarımız yandı.'},
+    {t:'say',x:'İ durağı. Bir inek möö diyor.'},
+    {t:'task',x:'Söyle: i!',h:'iii',fx:'sincap',a:'İ, inek! İnek de bindi.'},
+    {t:'say',x:'J durağı. Burada bir jöle titriyor, jiğil jiğil!'},
+    {t:'task',x:'Söyle: je!',h:'je',fx:'sincap',a:'Je, jöle! Çok az kelimede olan nadir bir harf.'},
+    {t:'sfx',s:'anons'},
+    {t:'say',x:'Ve şimdi en güçlü harflerden biri: ke! K durağında iki yolcu bekliyor.'},
+    {t:'choice',x:'Kim binsin? Kedi mi, kuş mu?',r:'Kedi mi, kuş mu?',o:[
+      {w:['kedi','kediyi','kedim','edi','kedi binsin'],go:'kedi'},
+      {w:['kuş','kuşu','kus','kuş binsin','kuşş'],go:'kus'}]}
+  ],
+  kedi:[
+    {t:'task',x:'Kediyi çağır: kedi!',h:'ke... di',fx:'sincap',a:'Miyav! Kedi trene bindi.'},
+    {t:'go',to:'k2'}
+  ],
+  kus:[
+    {t:'task',x:'Kuşu çağır: kuş!',h:'kuş',fx:'sincap',a:'Cik cik! Kuş trene kondu.'},
+    {t:'go',to:'k2'}
+  ],
+  k2:[
+    {t:'say',x:'Ke boğazımızın arkasından patlar. Hadi deneyelim!'},
+    {t:'task',x:'Güçlü söyle: ke!',h:'ke... ke',fx:'dev',a:'Ke! Tam bir patlama!'},
+    {t:'task',x:'Kelimenin başında: kapı!',h:'ka... pı',fx:'tunel',a:'Gıcırrr... Kapı açıldı!'},
+    {t:'task',x:'Kelimenin ortasında: makas!',h:'ma... kas',fx:'sincap',a:'Kırt kırt, makas kesiyor!'},
+    {t:'task',x:'Kelimenin sonunda: tak tak!',h:'tak... tak',fx:'robot',a:'Tak tak! Tamirci robot geldi!'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Son durak: L durağı! Gökyüzünde bir leylek uçuyor.'},
+    {t:'task',x:'Söyle: le!',h:'le',fx:'normal',a:'Le, leylek! Son yolcu da bindi.'},
+    {t:'say',x:'Bütün harfler trende! A\'dan L\'ye kadar hepsini sen çağırdın.'},
+    {t:'task',x:'Hep birlikte söyleyelim: a, be, ce, çe!',h:'a ... be ... ce ... çe',fx:'koro',a:'Bütün harfler seninle şarkı söyledi!'},
+    {t:'task',x:'Bana söyle: teşekkürler Şimşek!',h:'te... şek... kür... ler ... şim... şek',fx:'dev',a:'Rica ederim! Kalan harfler Harf Metrosu\'nda seni bekliyor!'}
+  ]
+  }
+});
+
+/* ---------------- 12. HARF METROSU (M-Z) ---------------- */
+STORIES.push({
+  id:'harf2', icon:'🔠', title:'Harf Metrosu (M-Z)', desc:'Metroyla M\'den Z\'ye harfler', endSfx:'kapi',
+  ending:'Alfabenin kahramanı sensin!',
+  scenes:{
+  start:[
+    {t:'sfx',s:'kapi'},
+    {t:'say',x:'Merhaba yolcu! Ben Minik metro. Bugün Harf Metrosu oldum!'},
+    {t:'say',x:'M harfinden Z harfine kadar bütün harfleri toplayacağız.'},
+    {t:'task',x:'Turnikeye söyle: bip!',h:'bip',fx:'robot',a:'Turnike açıldı. Hadi bin!'},
+    {t:'sfx',s:'kapi'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'İlk durak: M durağı. Bir maymun zıplıyor.'},
+    {t:'task',x:'Söyle: me!',h:'me',fx:'sincap',a:'Me, maymun! Maymun metroya bindi.'},
+    {t:'say',x:'N durağı. Kıpkırmızı bir nar parlıyor.'},
+    {t:'task',x:'Söyle: ne!',h:'ne',fx:'normal',a:'Ne, nar! Nar da bindi.'},
+    {t:'say',x:'O durağı. Bir otobüs bize el salladı.'},
+    {t:'task',x:'Söyle: o!',h:'ooo',fx:'dev',a:'O, otobüs!'},
+    {t:'say',x:'Ö durağı. Bir ördek vak vak diyor.'},
+    {t:'task',x:'Söyle: ö!',h:'ööö',fx:'sincap',a:'Ö, ördek! Ördek de bindi.'},
+    {t:'sfx',s:'metrofren'},
+    {t:'say',x:'Güçlü harf geldi: pe! Dudaklarını kapat, sonra pat diye aç.'},
+    {t:'task',x:'Güçlü söyle: pe!',h:'pe... pe',fx:'dev',a:'Pat! Ne güçlü bir pe!'},
+    {t:'task',x:'Kelimenin başında: pasta!',h:'pas... ta',fx:'sincap',a:'Mmm, çikolatalı pasta!'},
+    {t:'task',x:'Kelimenin sonunda: top!',h:'top',fx:'sincap',a:'Top zıp zıp zıplıyor!'},
+    {t:'sfx',s:'kapi'},
+    {t:'say',x:'Şimdi dilimizi titreten harf: re! Motor gibi rrr diye ses çıkarır.'},
+    {t:'task',x:'Söyle: re!',h:'re... re',fx:'dev',a:'Re! Harika!'},
+    {t:'task',x:'Kelimenin başında: roket!',h:'ro... ket',fx:'tunel',a:'Roket uzaya fırladı!'},
+    {t:'task',x:'Kelimenin sonunda: kar!',h:'kar',fx:'normal',a:'Lapa lapa kar yağıyor!'},
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Güçlü harf: se! Yılan gibi sss diye ıslık çal.'},
+    {t:'task',x:'Söyle: se!',h:'se... se',fx:'sincap',a:'Sss! Yılan bile seni alkışladı!'},
+    {t:'task',x:'Kelimenin başında: simit!',h:'si... mit',fx:'normal',a:'Çıtır çıtır simit!'},
+    {t:'task',x:'Kelimenin sonunda: ananas!',h:'a... na... nas',fx:'sincap',a:'Sapsarı bir ananas!'},
+    {t:'sfx',s:'metrofren'},
+    {t:'say',x:'Güçlü harf: şe! Parmağını dudağına koy ve şşş de.'},
+    {t:'task',x:'Söyle: şe!',h:'şe... şe',fx:'tunel',a:'Şşş! Metro sessizce gidiyor.'},
+    {t:'task',x:'Kelimenin başında: şeker!',h:'şe... ker',fx:'sincap',a:'Tatlı bir şeker!'},
+    {t:'task',x:'Kelimenin sonunda: güneş!',h:'gü... neş',fx:'normal',a:'Güneş parlıyor!'},
+    {t:'choice',x:'Tünelde iki yol var. Şelaleye mi gidelim, şatoya mı?',r:'Şelale mi, şato mu?',o:[
+      {w:['şelale','şelaleye','selale','şelale','şelali','lale'],go:'selale'},
+      {w:['şato','şatoya','sato','şatoyu','şatu'],go:'sato'}]}
+  ],
+  selale:[
+    {t:'task',x:'Söyle: şelale!',h:'şe... la... le',fx:'tunel',a:'Şırıl şırıl bir şelale!'},
+    {t:'go',to:'t'}
+  ],
+  sato:[
+    {t:'task',x:'Söyle: şato!',h:'şa... to',fx:'dev',a:'Kocaman bir şato, kuleleri var!'},
+    {t:'go',to:'t'}
+  ],
+  t:[
+    {t:'sfx',s:'hizli'},
+    {t:'say',x:'Güçlü harf: te! Dilinin ucunu dişlerinin arkasına değdir ve tık diye çıkar.'},
+    {t:'task',x:'Söyle: te!',h:'te... te',fx:'robot',a:'Tık! Ne güzel bir te!'},
+    {t:'task',x:'Kelimenin başında: tren!',h:'tren',fx:'dev',a:'Tren düdüğünü çaldı!'},
+    {t:'sfx',s:'duduk'},
+    {t:'task',x:'Kelimenin sonunda: at!',h:'at',fx:'dev',a:'At kişnedi! Ihihihi!'},
+    {t:'say',x:'U durağı. Tepemizden bir uçak geçiyor.'},
+    {t:'task',x:'Söyle: u!',h:'uuu',fx:'tunel',a:'U, uçak!'},
+    {t:'say',x:'Ü durağı. Mor bir üzüm salkımı var.'},
+    {t:'task',x:'Söyle: ü!',h:'üüü',fx:'sincap',a:'Ü, üzüm! Tatlı tatlı.'},
+    {t:'sfx',s:'vapur'},
+    {t:'say',x:'V durağı. Uzaktan bir vapur düdüğü geldi.'},
+    {t:'task',x:'Söyle: ve!',h:'ve',fx:'dev',a:'Ve, vapur!'},
+    {t:'say',x:'Y durağı. Gökte bir yıldız parlıyor.'},
+    {t:'task',x:'Söyle: ye!',h:'ye',fx:'tunel',a:'Ye, yıldız!'},
+    {t:'sfx',s:'metrofren'},
+    {t:'say',x:'Ve son durak: Z durağı! Çizgili bir zebra bekliyor.'},
+    {t:'task',x:'Söyle: ze!',h:'ze',fx:'sincap',a:'Ze, zebra! Son harf de bindi!'},
+    {t:'say',x:'Tebrikler! M\'den Z\'ye bütün harfleri topladın!'},
+    {t:'task',x:'Güçlü harfleri hep birlikte söyle: pe, se, şe, te!',h:'pe ... se ... şe ... te',fx:'koro',a:'Metro bile alkışladı!'},
+    {t:'task',x:'Bana söyle: teşekkürler Minik!',h:'te... şek... kür... ler ... mi... nik',fx:'robot',a:'Rica ederim! Harf Ekspresi\'yle birlikte bütün alfabeyi bitirdin!'}
+  ]
+  }
+});
+
 let PLAYED={};
 try{PLAYED=JSON.parse(localStorage.getItem('sy_played')||'{}');}catch(e){}
 function markPlayed(id){PLAYED[id]=(PLAYED[id]||0)+1;try{localStorage.setItem('sy_played',JSON.stringify(PLAYED));}catch(e){}}
@@ -1859,7 +2013,7 @@ renderVoices();
 renderList();
 renderLab();
 showSupport();
-log('Sayfa hazır (Faz 4.2)');
+log('Sayfa hazır (Faz 4.3)');
 loadSfxFiles();
 </script>
 </body>
