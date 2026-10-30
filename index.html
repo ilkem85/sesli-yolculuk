@@ -138,21 +138,39 @@ function loadVoices(){
   showSupport();
 }
 if('speechSynthesis' in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices;}
-/* ---------- Telaffuz sözlüğü ----------
-   Anlatıcı okumadan önce kelimeler doğru okunacak yazımla değiştirilir.
+/* ---------- Telaffuz düzeltmeleri (yere özel) ----------
+   Her düzeltme tek bir yere bağlıdır: hikaye + cümle + cümledeki kelime sırası.
+   Aynı kelime başka cümlede ya da başka hikayede değişmez.
    PRON_BASE: kalıcı düzeltmeler (koda gömülü).
-   sy_pron: telaffuz.html sayfasında yapılan düzeltmeler (aynı sitede, anında geçerli). */
+   sy_pron2: telaffuz.html'de yapılan düzeltmeler (aynı site, anında geçerli).
+   Anahtar: "<hikaye id>|<cümle>" ("*" = ortak cümleler). Değer: {w:{<kelime sırası>:{fix:"..."}}} */
 const PRON_BASE={};
 const PRON_L="A-Za-zÇĞİÖŞÜçğıöşüÂâÎîÛû'";
-function pronDict(){
-  const d={};Object.keys(PRON_BASE).forEach(k=>d[k]=PRON_BASE[k]);
-  try{const u=JSON.parse(localStorage.getItem('sy_pron')||'{}');Object.keys(u).forEach(k=>{if(u[k]&&u[k].fix)d[k]=u[k].fix;});}catch(e){}
-  return d;
+let CUR_STORY='*';
+function pronNorm(t){return String(t).trim().replace(/\d+/g,'#');}
+function pronStore(){
+  try{
+    let s=JSON.parse(localStorage.getItem('sy_pron2')||'null');
+    if(!s){ /* eski kelime bazlı kayıtları (sy_pron) yalnızca ilk işaretlendiği cümleye taşı */
+      s={};const old=JSON.parse(localStorage.getItem('sy_pron')||'{}');
+      Object.keys(old).forEach(k=>{const o=old[k];if(!o||!o.fix||!o.example)return;
+        const st=(o.stories&&o.stories[0])||'*',key=st+'|'+pronNorm(o.example);
+        let wi=-1,idx=0;o.example.split(new RegExp('(['+PRON_L+']+)')).forEach(tk=>{if(new RegExp('^['+PRON_L+']+$').test(tk)){if(wi<0&&tk.replace(/^'+|'+$/g,'').toLocaleLowerCase('tr-TR')===k)wi=idx;idx++;}});
+        if(wi<0)return;s[key]=s[key]||{story:st,text:o.example,w:{}};s[key].w[wi]={word:k,fix:o.fix};});
+      localStorage.setItem('sy_pron2',JSON.stringify(s));
+    }
+    return s;
+  }catch(e){return {};}
 }
-function pronKey(tok){return tok.replace(/^'+|'+$/g,'').toLocaleLowerCase('tr-TR');}
-function applyPron(text,dict){
-  dict=dict||pronDict();if(!Object.keys(dict).length)return text;
-  return text.split(new RegExp('(['+PRON_L+']+)')).map(t=>{const k=pronKey(t);return (k&&dict[k]!=null)?dict[k]:t;}).join('');
+function applyPron(text){
+  const nt=pronNorm(text),u=pronStore(),cands=[CUR_STORY+'|'+nt,'*|'+nt];
+  let w=null;
+  for(const k of cands){const b=PRON_BASE[k],x=u[k];if(b||x){w=Object.assign({},b&&b.w||{},x&&x.w||{});break;}}
+  if(!w||!Object.keys(w).length)return text;
+  let idx=0;
+  return text.split(new RegExp('(['+PRON_L+']+)')).map(tk=>{
+    if(!new RegExp('^['+PRON_L+']+$').test(tk))return tk;
+    const f=w[idx++];return (f&&f.fix)?f.fix:tk;}).join('');
 }
 function say(text,opt){
   opt=opt||{};
@@ -909,7 +927,8 @@ async function runStory(story){
   }
   checkStop();
   await sfx('ding');
-  await say('Bugün tam '+said+' kere konuştun. '+story.ending);
+  await say('Bugün tam '+said+' kere konuştun.');
+  await say(story.ending);
   if(story.endSfx!==null)await sfx(story.endSfx||'duduk');
 }
 
@@ -1902,7 +1921,7 @@ function renderList(){
 
 let wakeLock=null;
 async function play(story){
-  if(busy)return;busy=true;
+  if(busy)return;busy=true;CUR_STORY=story.id;
   getCtx();
   $('stage').style.display='block';
   try{if('wakeLock' in navigator)wakeLock=await navigator.wakeLock.request('screen');}catch(e){}
@@ -1914,7 +1933,7 @@ async function play(story){
     if(e.message!=='__stop__'){log('Oyun hatası: '+e.message);ok=false;}
     else ok=false;
   }finally{
-    stopped=true;try{speechSynthesis.cancel();}catch(e){}
+    stopped=true;CUR_STORY='*';try{speechSynthesis.cancel();}catch(e){}
     stopMic();dot(false);
     $('stage').style.display='none';busy=false;
     try{if(wakeLock)wakeLock.release();}catch(e){}
@@ -2013,7 +2032,7 @@ renderVoices();
 renderList();
 renderLab();
 showSupport();
-log('Sayfa hazır (Faz 4.3)');
+log('Sayfa hazır (Faz 4.4)');
 loadSfxFiles();
 </script>
 </body>
